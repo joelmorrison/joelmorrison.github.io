@@ -23,7 +23,7 @@
       this.x = this.c.getContext('2d');
       this.tip = document.createElement('p');
       this.tip.className = 'live-tip';
-      this.tip.hidden = true;
+      this.tip.setAttribute('aria-hidden', 'true');
       stage.appendChild(this.tip);
 
       const lap = net.lap;
@@ -32,6 +32,10 @@
       this.t0 = performance.now(); this.paused = 0;
       this.hover = null; this.visible = true; this.running = false;
       this.lastLabel = 0;
+      // eased state: the hovered neuron (kept while it fades out), its fade, smoothed activations,
+      // how present each connection's travelling signal is, and where along each thread it has got to
+      this.hv = null; this.hT = 0; this.hoverAt = 0; this.lastNow = 0;
+      this.smA = null; this.vis = null; this.ph = null;
 
       new IntersectionObserver(([e]) => { this.visible = e.isIntersecting; this.kick(); }, { threshold: 0.05 }).observe(stage);
       document.addEventListener('visibilitychange', () => this.kick());
@@ -90,56 +94,91 @@
     }
 
     draw(now) {
-      if (!this.pts || !this.w || !this.o.isReady()) { if (this.running) return; return; }
+      if (!this.pts || !this.w || !this.o.isReady()) return;
       const { x: ctx, w, h, dpr, col, pts } = this, cell = this.o.cell;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, h);
 
+      // frame-rate independent easing; reduced motion snaps straight to the target
+      const dt = this.animated && this.lastNow ? Math.min(64, now - this.lastNow) : 16;
+      this.lastNow = this.animated ? now : 0;
+      const ease = tau => this.animated ? 1 - Math.exp(-dt / tau) : 1;
+
       const { x: inp, seconds } = this.inputsAt(now);
       const { h: hid, o: out } = this.forward(inp);
-      const acts = [inp, hid, out];
+      // what you see is smoothed a little, so neurons swell and settle instead of flickering
+      const raw = [inp, hid, out];
+      if (!this.smA) this.smA = raw.map(l => l.slice());
+      const acts = raw.map((l, li) => l.map((v, m) => (this.smA[li][m] += (v - this.smA[li][m]) * ease(70))));
       const W1 = this.net.hidden_weights, W2 = this.net.output_weights;
 
       // every connection's signal this instant: its weight times what its source neuron is sending
       const edges = [];
-      W1.forEach((row, r) => row.forEach((wgt, i) => edges.push({ a: pts[0][i], b: pts[1][r], s: wgt * inp[i], la: 0, ia: i, lb: 1, ib: r })));
-      W2.forEach((row, r) => row.forEach((wgt, i) => edges.push({ a: pts[1][i], b: pts[2][r], s: wgt * hid[i], la: 1, ia: i, lb: 2, ib: r })));
+      W1.forEach((row, r) => row.forEach((wgt, i) => edges.push({ a: pts[0][i], b: pts[1][r], s: wgt * acts[0][i], la: 0, ia: i, lb: 1, ib: r })));
+      W2.forEach((row, r) => row.forEach((wgt, i) => edges.push({ a: pts[1][i], b: pts[2][r], s: wgt * acts[1][i], la: 1, ia: i, lb: 2, ib: r })));
       const max = Math.max(...edges.map(e => Math.abs(e.s))) || 1;
-      const hv = this.hover;
+      if (!this.vis) { this.vis = new Float32Array(edges.length); this.ph = new Float32Array(edges.length).map((_, n) => (n * 0.618) % 1); }
+      // the 26 strongest carry visible signal; the set changes gently, never with a pop
+      const top = new Set(edges.map((e, n) => n).sort((p, q) => Math.abs(edges[q].s) - Math.abs(edges[p].s)).slice(0, 26));
+      edges.forEach((e, n) => {
+        this.vis[n] += ((top.has(n) ? 1 : 0) - this.vis[n]) * ease(260);
+        const v = Math.abs(e.s) / max, len = Math.hypot(e.b.x - e.a.x, e.b.y - e.a.y);
+        this.ph[n] = this.animated ? (this.ph[n] + (dt / 1000) * (50 + 70 * v) / len) % 1 : 0.35;   // stronger signal, faster thread
+      });
+
+      // hover fades in and out; the neuron stays in view while it fades
+      this.hT += ((this.hover ? 1 : 0) - this.hT) * ease(this.hover ? 110 : 150);
+      if (!this.hover && this.hT < 0.004) { this.hT = 0; this.hv = null; }
+      const hv = this.hv, hT = this.hT;
       const touches = e => hv && ((e.la === hv.l && e.ia === hv.k) || (e.lb === hv.l && e.ib === hv.k));
 
-      // hovering: the rest of the cloth sinks back so one neuron's threads can be followed
-      if (hv) {
-        ctx.fillStyle = col.ground; ctx.globalAlpha = 0.6;
-        ctx.fillRect(0, 0, w, h);
-        ctx.globalAlpha = 1;
+      if (hT > 0) {   // the rest of the cloth sinks back so one neuron's threads can be followed
+        ctx.fillStyle = col.ground; ctx.globalAlpha = 0.62 * hT;
+        ctx.fillRect(0, 0, w, h); ctx.globalAlpha = 1;
       }
 
-      const t = this.animated ? (now - this.t0) / 1000 : 0.35;
-      const strong = edges.slice().sort((p, q) => Math.abs(q.s) - Math.abs(p.s)).slice(0, 26);
-      const shown = hv ? edges.filter(touches) : strong;
-      for (const e of shown) {
-        const v = Math.abs(e.s) / max;
-        if (hv) this.thread(e.a, e.b, Math.max(0.25, v), e.s >= 0 ? col.pearl : col.thread2);
-        // two floats travel along each live thread, source to target; stronger signal, brighter float
-        const len = Math.hypot(e.b.x - e.a.x, e.b.y - e.a.y), speed = 70 / len;
-        const d = (this.o.cell * 1.15) / len;   // one weave cell along the thread
+      const comets = (e, n, alpha) => {
+        const v = Math.abs(e.s) / max, len = Math.hypot(e.b.x - e.a.x, e.b.y - e.a.y), d = (cell * 1.15) / len;
         for (let p = 0; p < 2; p++) {
-          const u = ((t * speed + p * 0.5 + (e.ia * 0.137 + e.ib * 0.31)) % 1);
+          const u = (this.ph[n] + p * 0.5) % 1;
           // a short comet of floats: bright head, two fading cells behind it
           [1, 0.5, 0.22].forEach((fade, q) => {
             const uu = u - q * d; if (uu < 0) return;
-            this.float(e.a.x + (e.b.x - e.a.x) * uu, e.a.y + (e.b.y - e.a.y) * uu, (0.45 + 0.55 * v) * fade, e.s >= 0 ? col.pearl : col.thread);
+            this.float(e.a.x + (e.b.x - e.a.x) * uu, e.a.y + (e.b.y - e.a.y) * uu, (0.45 + 0.55 * v) * fade * alpha, e.s >= 0 ? col.pearl : col.thread);
           });
         }
+      };
+      edges.forEach((e, n) => {
+        const a = this.vis[n] * (1 - 0.85 * hT) * (touches(e) ? 0 : 1);
+        if (a > 0.02) comets(e, n, a);
+      });
+      if (hv && hT > 0) {
+        // the hovered neuron's threads draw outwards from it, then carry their signal
+        const reach = this.animated ? 1 - Math.pow(1 - Math.min(1, (now - this.hoverAt) / 460), 3) : 1;
+        edges.forEach((e, n) => {
+          if (!touches(e)) return;
+          const v = Math.abs(e.s) / max, from = e.la === hv.l && e.ia === hv.k ? e.a : e.b, to = from === e.a ? e.b : e.a;
+          this.thread(from, to, Math.max(0.25, v) * hT, e.s >= 0 ? col.pearl : col.thread2, reach);
+          if (reach > 0.98) comets(e, n, hT);
+        });
       }
 
       // each neuron fills with halftone in proportion to how strongly it is firing
-      const r = Math.max(cell * 1.4, Math.min(this.box.h / 32, 18));
+      const r = window.LoomPictures.nodeRadius(this.box, cell);
       acts.forEach((layer, l) => layer.forEach((a, k) => {
-        const p = pts[l][k], dim = hv && !(hv.l === l && hv.k === k) && !this.linked(hv, l, k);
-        this.node(p.x, p.y, r, Math.abs(a), a >= 0 ? col.pearl : col.thread2, dim ? 0.25 : 1);
+        const p = pts[l][k], other = hv && !(hv.l === l && hv.k === k) && !this.linked(hv, l, k);
+        this.node(p.x, p.y, r, Math.abs(a), a >= 0 ? col.pearl : col.thread2, other ? 1 - 0.75 * hT : 1);
       }));
+      // a ring of dots marks the neuron being followed, settling in as it fades up
+      if (hv && hT > 0.01) {
+        const p = pts[hv.l][hv.k], R = r + cell * 1.4 + (1 - hT) * 10, turn = this.animated ? now * 0.00035 : 0;
+        ctx.fillStyle = col.pearl; ctx.globalAlpha = 0.85 * hT; ctx.beginPath();
+        for (let q = 0; q < 20; q++) {
+          const ang = turn + q * Math.PI / 10, cx = p.x + Math.cos(ang) * R, cy = p.y + Math.sin(ang) * R;
+          ctx.moveTo(cx + 1.3, cy); ctx.arc(cx, cy, 1.3, 0, 7);
+        }
+        ctx.fill(); ctx.globalAlpha = 1;
+      }
 
       // output labels read the live decision
       if (this.o.labels && (now - this.lastLabel > 120 || !this.animated)) {
@@ -171,10 +210,10 @@
     }
 
     // a whole thread drawn as floats, for the hovered neuron's connections
-    thread(a, b, alpha, color) {
+    thread(a, b, alpha, color, reach = 1) {
       const cell = this.o.cell, steps = Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / cell);
       let last = '';
-      for (let s = 0; s <= steps; s++) {
+      for (let s = 0; s <= steps * reach; s++) {
         const px = a.x + (b.x - a.x) * s / steps, py = a.y + (b.y - a.y) * s / steps;
         const key = Math.floor(px / cell) + ',' + Math.floor(py / cell);
         if (key === last) continue; last = key;
@@ -213,9 +252,10 @@
     setHover(hv) {
       const same = (a, b) => a && b && a.l === b.l && a.k === b.k;
       if (same(hv, this.hover) || (!hv && !this.hover)) return;
+      if (hv && !same(hv, this.hv)) { this.hv = hv; this.hoverAt = performance.now(); }
       this.hover = hv;
       this.stage.classList.toggle('is-inspecting', !!hv);
-      if (!hv) this.tip.hidden = true;
+      this.tip.classList.toggle('on', !!hv);   // the tip fades; the neuron's threads fade with it
       if (!this.animated) this.draw(0);
     }
 
@@ -234,7 +274,6 @@
       }
       const html = `<span>${name}</span><b>${value}</b>`;
       if (this.tip.innerHTML !== html) this.tip.innerHTML = html;
-      this.tip.hidden = false;
       const left = hv.l === 2;   // outputs: the tip sits to the left so it never covers the labels
       this.tip.style.left = `${Math.round(p.x + (left ? -18 : 18))}px`;
       this.tip.style.top = `${Math.round(p.y)}px`;

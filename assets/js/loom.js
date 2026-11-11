@@ -23,8 +23,16 @@
         zoom: 2.6,
         warp: true,
         onRow: null,
+        // an entry other than row by row: order(i, j, tone, x, y) gives each cell its moment, 0 to 1
+        order: null,
+        duration: 1800,
+        easing: k => k,
+        flash: 0,           // ms a newly woven cell stays pearl before it cools to lilac
+        motion: null,       // override: animate even on touch (the hero's one-off entry)
       }, opts);
-      this.motion = !REDUCED.matches && FINE.matches;   // reduced motion and touch get the finished cloth
+      // reduced motion gets the finished cloth; touch does too unless a cloth asks for its entry
+      this.motion = this.o.motion !== null ? this.o.motion && !REDUCED.matches : !REDUCED.matches && FINE.matches;
+      this.recent = [];
       this.temp = document.createElement('canvas');
       this.visible = false;
       this.started = !this.o.startOnVisible;
@@ -134,9 +142,27 @@
       g.addColorStop(0, this.col.thread); g.addColorStop(0.7, this.col.thread); g.addColorStop(1, this.col.thread2);
       this.threadFill = g; this.maskX.fillStyle = g;
       const weaveIn = this.o.animate && this.motion;
-      const upTo = keepProgress ? Math.min(this.row ?? this.rows, this.rows) : (weaveIn ? 0 : this.rows);
-      for (let j = 0; j < upTo; j++) this.weaveRow(j, false);
-      this.row = upTo; this.particles = []; this.lastRow = performance.now();
+      this.particles = []; this.recent = []; this.lastRow = performance.now();
+      if (this.o.order && weaveIn) {
+        // sequenced entry: every cell with thread gets a moment; the frame loop weaves up to the eased clock
+        const list = [];
+        for (let j = 0; j < this.rows; j++) for (let i = 0; i < this.cols; i++) {
+          const k = j * this.cols + i, v = this.cells[k];
+          if (v > 0.02) list.push([this.o.order(i, j, v, i * cell + cell / 2, j * cell + cell / 2), k]);
+        }
+        list.sort((p, q) => p[0] - q[0]);
+        this.seqT = Float32Array.from(list, l => l[0]); this.seqI = Int32Array.from(list, l => l[1]);
+        this.seqK = 0;
+        this.seqR = keepProgress ? (this.seqR ?? 1) : 0;
+        this.seqStart = performance.now() - this.seqR * this.o.duration;
+        this.revealTo(this.o.easing(this.seqR), false, 0);
+        this.row = this.seqR >= 1 ? this.rows : Math.min(this.rows - 1, Math.floor(this.o.easing(this.seqR) * this.rows));
+      } else {
+        this.seqI = null;
+        const upTo = keepProgress ? Math.min(this.row ?? this.rows, this.rows) : (weaveIn ? 0 : this.rows);
+        for (let j = 0; j < upTo; j++) this.weaveRow(j, false);
+        this.row = upTo;
+      }
       if (this.o.onRow) this.o.onRow(this.row, this.rows);
       this.frame(performance.now(), true);
       this.kick();
@@ -147,6 +173,22 @@
       const cx = i * cell + cell / 2 + dx, cy = j * cell + cell / 2 + dy;
       if (v >= this.o.floatAt) x.fillRect(cx - cell * 0.5, cy - cell * 0.22, cell, cell * 0.44);
       else if (v > 0.02) { x.beginPath(); x.arc(cx, cy, cell * 0.62 * Math.pow(v, 0.75), 0, 7); x.fill(); }
+    }
+
+    // sequenced entry: weave every cell whose moment has come
+    revealTo(p, fly, now) {
+      const cell = this.o.cell, x = this.maskX, n = this.seqT.length;
+      x.fillStyle = this.threadFill;
+      while (this.seqK < n && this.seqT[this.seqK] <= p) {
+        const k = this.seqI[this.seqK++], i = k % this.cols, j = (k - i) / this.cols, v = this.cells[k];
+        if (fly && this.o.particles && v >= this.o.floatAt * 0.6) {
+          const fromLeft = j % 2 === 0, x1 = i * cell + cell / 2, y1 = j * cell + cell / 2;
+          this.particles.push({ i, j, x1, y1, x0: fromLeft ? -30 : this.w + 30, y0: y1 + (Math.random() - 0.5) * 60, t0: now, dur: 420 + Math.random() * 260 });
+          continue;
+        }
+        this.shape(x, i, j);
+        if (fly && this.o.flash) this.recent.push(k, now);
+      }
     }
 
     weaveRow(j, fly) {
@@ -180,8 +222,14 @@
     frame(now, once = false) {
       if (!once && !this.visible) { this.running = false; return; }
       const { ctx, w, h, dpr, col } = this;
-      const weaving = this.started && this.o.animate && this.motion && this.row < this.rows;
-      if (!once && weaving && now - this.lastRow > this.o.rowMs) {
+      const weaving = this.started && this.o.animate && this.motion && (this.seqI ? this.seqR < 1 : this.row < this.rows);
+      if (!once && weaving && this.seqI) {
+        this.seqR = Math.min(1, (now - this.seqStart) / this.o.duration);
+        const p = this.o.easing(this.seqR);
+        this.revealTo(p, true, now);
+        const row = this.seqR >= 1 ? this.rows : Math.min(this.rows - 1, Math.floor(p * this.rows));
+        if (row !== this.row) { this.row = row; if (this.o.onRow) this.o.onRow(this.row, this.rows); }
+      } else if (!once && weaving && now - this.lastRow > this.o.rowMs) {
         const steps = Math.min(4, Math.floor((now - this.lastRow) / this.o.rowMs));
         for (let s = 0; s < steps && this.row < this.rows; s++) { this.weaveRow(this.row, true); this.row++; }
         this.lastRow = now;
@@ -213,6 +261,21 @@
         ctx.drawImage(this.temp, 0, 0, w, h);
       } else ctx.drawImage(this.maskC, 0, 0, w, h);
 
+      // newly woven cells: pearl for a moment, cooling into the cloth
+      if (this.recent.length) {
+        const keep = [], F = this.o.flash;
+        ctx.fillStyle = col.pearl;
+        for (let q = 0; q < this.recent.length; q += 2) {
+          const k = this.recent[q], age = now - this.recent[q + 1];
+          if (age >= F) continue;
+          const i = k % this.cols;
+          ctx.globalAlpha = 0.9 * (1 - age / F) * (1 - age / F);
+          this.shape(ctx, i, (k - i) / this.cols);
+          keep.push(k, this.recent[q + 1]);
+        }
+        ctx.globalAlpha = 1; this.recent = keep;
+      }
+
       // threads in flight
       if (this.particles.length) {
         ctx.strokeStyle = col.thread; ctx.lineWidth = this.o.cell * 0.4; ctx.lineCap = 'round';
@@ -238,7 +301,7 @@
       if (L.a > 0.01) this.drawLens(ctx, L.x, L.y, L.a);
 
       if (once) return;
-      const busy = weaving || this.particles.length || s.on || s.a > 0.01 || L.on || L.a > 0.01;
+      const busy = weaving || this.particles.length || this.recent.length || s.on || s.a > 0.01 || L.on || L.a > 0.01;
       if (busy) requestAnimationFrame(t => this.frame(t)); else { this.running = false; this.lastFrame = 0; }
     }
 
@@ -291,6 +354,9 @@
     })));
   }
 
+  // One neuron's radius, shared by the woven picture and the live layer.
+  function nodeRadius(box, cell) { return Math.max(cell * 1.4, Math.min(box.h / 30, 22)); }
+
   // The real all-rounder: every connection drawn with its trained weight. The strongest fifth
   // weave as bright thread; the rest fall back to halftone, sized by how strong they are.
   function drawNetwork(ctx, box, net, cell) {
@@ -307,7 +373,7 @@
       ctx.strokeStyle = `rgba(0,0,0,${hot ? 1 : 0.08 + 0.36 * s})`;
       ctx.beginPath(); ctx.moveTo(e.a.x, e.a.y); ctx.lineTo(e.b.x, e.b.y); ctx.stroke();
     });
-    const r = Math.max(cell * 1.4, Math.min(box.h / 32, 18));
+    const r = nodeRadius(box, cell);
     ctx.fillStyle = '#000';
     for (const layer of pts) for (const p of layer) { ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 7); ctx.fill(); }
     return pts;
@@ -356,5 +422,5 @@
 
   Loom.canLook = () => FINE.matches && !REDUCED.matches;
   window.Loom = Loom;
-  window.LoomPictures = { networkLayout, drawNetwork, drawTrack, drawSilk };
+  window.LoomPictures = { networkLayout, nodeRadius, drawNetwork, drawTrack, drawSilk };
 })();

@@ -9,6 +9,9 @@
   const EASE = 'cubic-bezier(.22, 1, .36, 1)';
   const clamp01 = v => Math.max(0, Math.min(1, v));
 
+  // transitions stay off until the page has painted once, so nothing animates into its resting place on load
+  requestAnimationFrame(() => requestAnimationFrame(() => root.classList.add('ready')));
+
   /* ---------- chapter 00: the all-rounder's network, centred, with the name along the bottom ---------- */
   const weave = document.getElementById('weave');
   const labels = document.getElementById('labels');
@@ -25,16 +28,17 @@
     x.fillStyle = g; x.fillRect(0, 0, w, h);
     x.globalCompositeOperation = 'source-over';
     // the output labels need room for their longest live reading, "steering straight"
-    const LABEL = narrow ? 146 : 170;
+    const LABEL = narrow ? 146 : 186;
     if (narrow) {
-      // phones: a fixed-size network under the header, sized from the width so the copy can flow beneath it
-      const bh = Math.round(Math.min(w * 0.62, window.innerHeight * 0.34, 340)), bx = w * 0.06;
-      heroBox = { x: bx, y: 84, w: Math.min(w * 0.64, bh / 0.62, (w - 20 - LABEL - bx) / 0.92), h: bh };
+      // phones: the network fills the top of the screen, as wide as its labels allow
+      const bh = Math.round(Math.min(w * 0.82, window.innerHeight * 0.44, 420)), bx = w * 0.06;
+      heroBox = { x: bx, y: 80, w: Math.min(w * 0.66, bh / 0.62, (w - 20 - LABEL - bx) / 0.92), h: bh };
     } else {
-      // centre what you see (three columns of neurons plus their labels), and stop short of the name
+      // the network is the first thing you see: as large as the screen allows above the name,
+      // centred on what you see (three columns of neurons plus their labels)
       const stage = weave.parentElement, foot = stage.querySelector('.hero-foot');
-      const top = Math.max(96, h * 0.12), room = foot.getBoundingClientRect().top - stage.getBoundingClientRect().top - top - 40;
-      const bh = Math.max(260, Math.min(h * 0.58, room)), bw = Math.min(w * 0.6, bh * 1.75), seen = bw * 0.84 + LABEL;
+      const top = Math.max(84, h * 0.09), room = foot.getBoundingClientRect().top - stage.getBoundingClientRect().top - top - 28;
+      const bh = Math.max(300, Math.min(h * 0.76, room)), bw = Math.min(w * 0.74, bh * 1.95), seen = bw * 0.84 + LABEL;
       heroBox = { x: (w - seen) / 2 - bw * 0.08, y: top, w: bw, h: bh };
     }
     drawNetwork(x, heroBox, NET, cell);
@@ -51,42 +55,50 @@
     if (liveNet) liveNet.o.labels = [...labels.querySelectorAll('.out')];
   }
 
-  /* ---------- section light: a different soft spot per chapter, faded away from the text ---------- */
-  function sectionLight(x, w, h, n) {
-    const narrow = window.innerWidth < 860;
-    const spots = [[0.92, 0.25], [0.85, 0.8], [0.97, 0.55], [0.8, 0.15], [0.95, 0.9], [0.88, 0.45]];
-    const [cx, cy] = spots[n % spots.length], r = Math.max(w, Math.min(h, 1100)) * (narrow ? 0.45 : 0.42);
-    const g = x.createRadialGradient(cx * w, cy * h, 0, cx * w, cy * h, r);
-    g.addColorStop(0, `rgba(0,0,0,${narrow ? 0.3 : 0.4})`); g.addColorStop(1, 'rgba(0,0,0,0)');
-    x.fillStyle = g; x.fillRect(0, 0, w, h);
-    x.globalCompositeOperation = 'destination-out';
-    const f = x.createLinearGradient(0, 0, w, 0);
-    f.addColorStop(0, 'rgba(0,0,0,1)'); f.addColorStop(narrow ? 0.9 : 0.74, 'rgba(0,0,0,1)'); f.addColorStop(1, 'rgba(0,0,0,0)');
-    x.fillStyle = f; x.fillRect(0, 0, w, h); x.globalCompositeOperation = 'source-over';
-  }
+  /* ---------- the entry: the picture develops out of scattered dots, from the middle of the network outwards ---------- */
+  const stage = weave.parentElement;
+  const rand = (i, j) => { const v = Math.sin(i * 127.1 + j * 311.7) * 43758.5453; return v - Math.floor(v); };   // stable per cell
+  const ENTRY = {
+    duration: 2000, flash: 520, particles: false, easing: k => 1 - Math.pow(1 - k, 3),
+    order: (i, j, v, x, y) => {
+      const b = heroBox, cx = b.x + b.w / 2, cy = b.y + b.h / 2, far = Math.hypot(Math.max(cx, weave.clientWidth - cx), Math.max(cy, weave.clientHeight - cy));
+      return 0.62 * Math.hypot(x - cx, y - cy) / far + 0.38 * rand(i, j);
+    },
+  };
 
   /* ---------- cloths ---------- */
   function start() {
-    if (NET.lap && window.LiveNet) liveNet = new window.LiveNet(weave.parentElement, NET, {
+    if (NET.lap && window.LiveNet) liveNet = new window.LiveNet(stage, NET, {
       cell: 6, clock: document.querySelector('.lap-clock'),
-      isReady: () => hero.row >= hero.rows,   // threads start moving once the weave-in has finished
+      isReady: () => hero.row >= hero.rows,   // threads start moving once the entry has finished
     });
-    const hero = new window.Loom(weave, {
-      cell: 6, rowMs: 9, interactive: true, eager: true, draw: heroPicture,
-      onRow: row => { if (liveNet && row >= hero.rows) liveNet.redraw(); },
-    });
+    // the name arrives halfway through the entry; the labels once the network is whole
+    const arrived = (row, rows) => {
+      if (row >= rows * 0.5) stage.classList.add('is-named');
+      if (row >= rows) { stage.classList.add('is-woven'); if (liveNet) liveNet.redraw(); }
+    };
+    const hero = new window.Loom(weave, Object.assign({
+      cell: 6, interactive: true, eager: true, warp: false, motion: true, draw: heroPicture, onRow: arrived,
+    }, ENTRY));
+    if (!hero.motion) arrived(1, 1);
     const trackBox = (w, h) => ({ x: w * 0.04, y: h * 0.04, w: w * 0.92, h: h * 0.92 });
     new window.Loom(document.getElementById('track'), {
-      cell: 6, rowMs: 14, startOnVisible: true, interactive: true,
+      cell: 6, rowMs: 14, startOnVisible: true, interactive: true, warp: false,
       draw: (x, w, h) => drawTrack(x, trackBox(w, h), NET.technical_track, 6),
     });
     if (window.Loom.canLook()) document.querySelector('.hold-hint').hidden = false;
 
-    // the halftone background: each chapter gets its own fall of light, kept out of the reading column
-    document.querySelectorAll('.sheen-field').forEach((cv, n) => new window.Loom(cv, {
-      cell: 8, animate: false, particles: false, floatAt: 2,
-      draw: (x, w, h) => sectionLight(x, w, h, n),
-    }));
+    // the halftone field: one light behind the whole page, gliding from chapter to chapter
+    const chapters = ['.hero', '#about', '#work', '#receipts', '#education', '#experience', '#contact'].map(q => document.querySelector(q)).filter(Boolean);
+    if (window.Field) new window.Field(document.getElementById('field'), chapters, [
+      [0.95, 0.95, 0.42, 0.42],   // hero: rises from the bottom right as the hero leaves
+      [0.92, 0.26, 0.42, 0.42],   // about
+      [0.86, 0.76, 0.46, 0.4],    // work
+      [0.97, 0.5, 0.4, 0.44],     // skills
+      [0.84, 0.2, 0.42, 0.4],     // education
+      [0.95, 0.84, 0.44, 0.42],   // experience
+      [0.9, 0.46, 0.5, 0.46],     // contact
+    ]);
 
     // all work: hovering Crash Course's row weaves a small copy of its track beside the pointer
     const preview = document.querySelector('.preview');
