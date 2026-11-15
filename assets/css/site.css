@@ -43,7 +43,9 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; }
-html { background: var(--ground); color: var(--text); scroll-behavior: smooth; scroll-padding-top: 80px; scrollbar-color: var(--thread-2) var(--ground); -webkit-text-size-adjust: 100%; }
+/* the warp: one faint dot per 6px weave cell, across the whole page. It is a background so the browser scrolls it
+   for free; the field canvas (field.js) draws only what is lit, on the same grid. */
+html { background: radial-gradient(circle, var(--warp) 0, var(--warp) .45px, transparent .95px) 0 0 / 6px 6px var(--ground); color: var(--text); scroll-behavior: smooth; scroll-padding-top: 80px; scrollbar-color: var(--thread-2) var(--ground); -webkit-text-size-adjust: 100%; }
 body { margin: 0; opacity: 1; animation: none; font: 400 var(--step-0)/1.6 var(--body); background: transparent; -webkit-font-smoothing: antialiased; caret-color: var(--thread); }
 ::selection { background: var(--thread); color: var(--on-thread); }
 img, video { display: block; max-width: 100%; height: auto; }

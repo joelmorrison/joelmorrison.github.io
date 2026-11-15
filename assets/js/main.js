@@ -88,17 +88,21 @@
     });
     if (window.Loom.canLook()) document.querySelector('.hold-hint').hidden = false;
 
-    // the halftone field: one light behind the whole page, gliding from chapter to chapter
+    // the halftone field: one night sky behind the whole page, with real constellations woven behind each chapter
     const chapters = ['.hero', '#about', '#work', '#receipts', '#education', '#experience', '#contact'].map(q => document.querySelector(q)).filter(Boolean);
-    if (window.Field) new window.Field(document.getElementById('field'), chapters, [
-      [0.95, 0.95, 0.42, 0.42],   // hero: rises from the bottom right as the hero leaves
-      [0.92, 0.26, 0.42, 0.42],   // about
-      [0.86, 0.76, 0.46, 0.4],    // work
-      [0.97, 0.5, 0.4, 0.44],     // skills
-      [0.84, 0.2, 0.42, 0.4],     // education
-      [0.95, 0.84, 0.44, 0.42],   // experience
-      [0.9, 0.46, 0.5, 0.46],     // contact
-    ]);
+    const SKY = window.CONSTELLATIONS;
+    // each chapter's sky: [constellation, x, y, size]. x and y are fractions of the screen; the first one leads.
+    // every chapter has at least one constellation that sits on the Milky Way, so the river runs through all of them.
+    // the hero has its own picture, so its sky stays dark
+    if (window.Field && SKY) new window.Field(document.getElementById('field'), chapters, [
+      null,
+      [[SKY.orion, 0.86, 0.5, 1], [SKY.taurus, 0.12, 0.76, 0.7], [SKY.pleiades, 0.44, 0.9, 0.2]],                // About: the hunter, what he chases, and the seven sisters
+      [[SKY.auriga, 0.87, 0.36, 0.85], [SKY.pegasus, 0.1, 0.7, 0.8], [SKY.sagitta, 0.52, 0.9, 0.3]],             // Work: the charioteer, the winged horse, the arrow
+      [[SKY.cygnus, 0.12, 0.68, 0.85], [SKY.lyra, 0.88, 0.3, 0.55], [SKY.aquila, 0.74, 0.82, 0.6]],              // Skills: the bridge, the weaver and the cowherd (the Summer Triangle)
+      [[SKY.perseus, 0.13, 0.7, 0.85], [SKY.corona, 0.85, 0.3, 0.5], [SKY.scutum, 0.68, 0.84, 0.34]],            // Education: the hero handed his tools, the crown not yet worn, the shield
+      [[SKY.gemini, 0.1, 0.72, 0.75], [SKY.plough, 0.84, 0.28, 0.85], [SKY.canisMajor, 0.72, 0.82, 0.62]],       // Experience: the twins, the plough, the faithful dog
+      [[SKY.cassiopeia, 0.5, 0.86, 0.5], [SKY.ursaMinor, 0.86, 0.42, 0.8], [SKY.cepheus, 0.1, 0.3, 0.5]],        // Contact: Polaris and the two that point to it
+    ], document.getElementById('main'));
 
     // all work: hovering Crash Course's row weaves a small copy of its track beside the pointer
     const preview = document.querySelector('.preview');
