@@ -175,10 +175,19 @@
       else if (v > 0.02) { x.beginPath(); x.arc(cx, cy, cell * 0.62 * Math.pow(v, 0.75), 0, 7); x.fill(); }
     }
 
+    // the same mark, added to the path being built instead of filled on its own: hundreds of cells then cost one fill
+    trace(x, i, j) {
+      const cell = this.o.cell, v = this.cells[j * this.cols + i];
+      const cx = i * cell + cell / 2, cy = j * cell + cell / 2;
+      if (v >= this.o.floatAt) x.rect(cx - cell * 0.5, cy - cell * 0.22, cell, cell * 0.44);
+      else if (v > 0.02) { const r = cell * 0.62 * Math.pow(v, 0.75); x.moveTo(cx + r, cy); x.arc(cx, cy, r, 0, 7); }
+    }
+
     // sequenced entry: weave every cell whose moment has come
     revealTo(p, fly, now) {
       const cell = this.o.cell, x = this.maskX, n = this.seqT.length;
       x.fillStyle = this.threadFill;
+      x.beginPath();
       while (this.seqK < n && this.seqT[this.seqK] <= p) {
         const k = this.seqI[this.seqK++], i = k % this.cols, j = (k - i) / this.cols, v = this.cells[k];
         if (fly && this.o.particles && v >= this.o.floatAt * 0.6) {
@@ -186,9 +195,10 @@
           this.particles.push({ i, j, x1, y1, x0: fromLeft ? -30 : this.w + 30, y0: y1 + (Math.random() - 0.5) * 60, t0: now, dur: 420 + Math.random() * 260 });
           continue;
         }
-        this.shape(x, i, j);
+        this.trace(x, i, j);
         if (fly && this.o.flash) this.recent.push(k, now);
       }
+      x.fill();
     }
 
     weaveRow(j, fly) {
@@ -237,7 +247,7 @@
       }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, h);
-      ctx.drawImage(this.warpC, 0, 0, w, h);
+      if (this.o.warp) ctx.drawImage(this.warpC, 0, 0, w, h);
 
       // the woven layer, plus a pearl sheen near the pointer (only then is the extra layer needed)
       const s = this.sheen;
@@ -262,16 +272,25 @@
       } else ctx.drawImage(this.maskC, 0, 0, w, h);
 
       // newly woven cells: pearl for a moment, cooling into the cloth
+      // They are drawn in a few bands of brightness, one fill each, instead of one fill per cell: the hero's entry
+      // flashes thousands of cells at once, and filling them one by one is what made it stutter.
       if (this.recent.length) {
-        const keep = [], F = this.o.flash;
-        ctx.fillStyle = col.pearl;
+        const keep = [], F = this.o.flash, BANDS = 6, bands = [];
         for (let q = 0; q < this.recent.length; q += 2) {
           const k = this.recent[q], age = now - this.recent[q + 1];
           if (age >= F) continue;
-          const i = k % this.cols;
-          ctx.globalAlpha = 0.9 * (1 - age / F) * (1 - age / F);
-          this.shape(ctx, i, (k - i) / this.cols);
+          const band = Math.min(BANDS - 1, Math.floor(age / F * BANDS));
+          (bands[band] || (bands[band] = [])).push(k);
           keep.push(k, this.recent[q + 1]);
+        }
+        ctx.fillStyle = col.pearl;
+        for (let b = 0; b < BANDS; b++) {
+          const list = bands[b]; if (!list) continue;
+          const u = (b + 0.5) / BANDS;
+          ctx.globalAlpha = 0.9 * (1 - u) * (1 - u);
+          ctx.beginPath();
+          for (let q = 0; q < list.length; q++) { const k = list[q], i = k % this.cols; this.trace(ctx, i, (k - i) / this.cols); }
+          ctx.fill();
         }
         ctx.globalAlpha = 1; this.recent = keep;
       }
@@ -346,8 +365,16 @@
   /* ---------- pictures ---------- */
 
   // Node positions for an 11 → 8 → 3 network inside a box.
+  // Wide screens: three columns, signal running left to right.
+  // box.upright (phones): three rows, signal running top to bottom, each row spread across the full width,
+  // so the layers have room between them and the picture still reads as a network on a narrow screen.
   function networkLayout(box) {
-    const sizes = [11, 8, 3], gap = Math.min(box.h / 11.5, 64);
+    const sizes = [11, 8, 3];
+    if (box.upright) return sizes.map((n, l) => {
+      const gap = Math.min(box.w / n, 150);
+      return Array.from({ length: n }, (_, k) => ({ x: box.x + box.w / 2 + (k - (n - 1) / 2) * gap, y: box.y + box.h * (0.07 + l * 0.43) }));
+    });
+    const gap = Math.min(box.h / 11.5, 64);
     return sizes.map((n, l) => Array.from({ length: n }, (_, k) => ({
       x: box.x + box.w * (0.08 + l * 0.42),
       y: box.y + box.h / 2 + (k - (n - 1) / 2) * gap,
@@ -355,12 +382,15 @@
   }
 
   // One neuron's radius, shared by the woven picture and the live layer.
-  function nodeRadius(box, cell) { return Math.max(cell * 1.4, Math.min(box.h / 30, 22)); }
+  function nodeRadius(box, cell) { return Math.max(cell * 1.4, Math.min(box.upright ? box.w / 36 : box.h / 30, 22)); }
 
   // The real all-rounder: every connection drawn with its trained weight. The strongest fifth
   // weave as bright thread; the rest fall back to halftone, sized by how strong they are.
+  // On a phone (box.upright) there is far less cloth per connection, so only the strongest fifth are woven solid,
+  // one cell wide, and the rest are drawn fine and faint: enough to show every connection is there, not enough
+  // to fill the picture in.
   function drawNetwork(ctx, box, net, cell) {
-    const pts = networkLayout(box);
+    const pts = networkLayout(box), slim = !!box.upright;
     const edges = [];
     net.hidden_weights.forEach((row, h) => row.forEach((wgt, i) => edges.push({ a: pts[0][i], b: pts[1][h], w: Math.abs(wgt) })));
     net.output_weights.forEach((row, o) => row.forEach((wgt, h) => edges.push({ a: pts[1][h], b: pts[2][o], w: Math.abs(wgt) })));
@@ -369,14 +399,24 @@
     ctx.lineCap = 'round';
     edges.sort((p, q) => p.w - q.w).forEach(e => {
       const hot = e.w >= hotAt, s = e.w / max;
-      ctx.lineWidth = cell * (hot ? 1.15 : 0.9);
-      ctx.strokeStyle = `rgba(0,0,0,${hot ? 1 : 0.08 + 0.36 * s})`;
+      ctx.lineWidth = cell * (slim ? (hot ? 0.8 : 0.55) : (hot ? 1.15 : 0.9));
+      ctx.strokeStyle = `rgba(0,0,0,${hot ? 1 : slim ? 0.05 + 0.2 * s : 0.08 + 0.36 * s})`;
       ctx.beginPath(); ctx.moveTo(e.a.x, e.a.y); ctx.lineTo(e.b.x, e.b.y); ctx.stroke();
     });
     const r = nodeRadius(box, cell);
     ctx.fillStyle = '#000';
     for (const layer of pts) for (const p of layer) { ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 7); ctx.fill(); }
     return pts;
+  }
+
+  // A constellation (from Field.figure) for a small woven card: lines in halftone, stars woven solid, sized by brightness.
+  function drawFigure(ctx, box, fig, cell) {
+    const s = Math.min(box.w, box.h), cx = box.x + box.w / 2, cy = box.y + box.h / 2;
+    const at = p => [cx + p.x * s, cy + p.y * s];
+    ctx.lineCap = 'round'; ctx.lineWidth = cell * 0.9; ctx.strokeStyle = 'rgba(0,0,0,.26)';
+    fig.lines.forEach(([f, t]) => { const a = at(fig.stars[f]), b = at(fig.stars[t]); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); });
+    ctx.fillStyle = '#000';
+    fig.stars.forEach(p => { const a = at(p); ctx.beginPath(); ctx.arc(a[0], a[1], cell * (0.75 + 1.5 * p.b), 0, 7); ctx.fill(); });
   }
 
   // Closed Catmull-Rom curve through the control points, the same construction Crash Course uses.
@@ -422,5 +462,5 @@
 
   Loom.canLook = () => FINE.matches && !REDUCED.matches;
   window.Loom = Loom;
-  window.LoomPictures = { networkLayout, nodeRadius, drawNetwork, drawTrack, drawSilk };
+  window.LoomPictures = { networkLayout, nodeRadius, drawNetwork, drawTrack, drawSilk, drawFigure };
 })();

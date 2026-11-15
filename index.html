@@ -49,14 +49,24 @@ html:not(.ready) *, html:not(.ready) *::before, html:not(.ready) *::after { tran
 <div class="sm" data-open="false">
   <div class="sm-scrim" aria-hidden="true"></div>
   <div class="sm-layers" aria-hidden="true"><span></span><span></span></div>
+  <!-- preview card: pointing at a chapter in the menu shows its headline and one of its constellations (main.js) -->
+  <div class="sm-preview" aria-hidden="true">
+    <div class="sm-card">
+      <canvas></canvas>
+      <p class="sm-card-k"></p>
+      <p class="sm-card-h"></p>
+      <p class="sm-card-n"></p>
+      <p class="sm-card-sky"></p>
+    </div>
+  </div>
   <nav class="sm-panel" id="nav" aria-label="Sections">
     <ol class="sm-list">
-      <li><a href="#about"><span class="sm-n">01</span><span class="sm-clip"><span class="sm-l">About</span></span></a></li>
-      <li><a href="#work"><span class="sm-n">02</span><span class="sm-clip"><span class="sm-l">Work</span></span></a></li>
-      <li><a href="#receipts"><span class="sm-n">03</span><span class="sm-clip"><span class="sm-l">Skills</span></span></a></li>
-      <li><a href="#education"><span class="sm-n">04</span><span class="sm-clip"><span class="sm-l">Education</span></span></a></li>
-      <li><a href="#experience"><span class="sm-n">05</span><span class="sm-clip"><span class="sm-l">Experience</span></span></a></li>
-      <li><a href="#contact"><span class="sm-n">06</span><span class="sm-clip"><span class="sm-l">Contact</span></span></a></li>
+      <li><a href="#about" data-sky="orion" data-note="Second-year Computer Science at DCU, with a focus on Python, web development and AI."><span class="sm-n">01</span><span class="sm-clip"><span class="sm-l">About</span></span></a></li>
+      <li><a href="#work" data-sky="auriga" data-note="Crash Course, a released machine-learning project, and three hackathon builds."><span class="sm-n">02</span><span class="sm-clip"><span class="sm-l">Work</span></span></a></li>
+      <li><a href="#receipts" data-sky="lyra" data-note="Eight skills, each linked to the work that shows it."><span class="sm-n">03</span><span class="sm-clip"><span class="sm-l">Skills</span></span></a></li>
+      <li><a href="#education" data-sky="perseus" data-note="BSc Computer Science at Dublin City University, expected 2029."><span class="sm-n">04</span><span class="sm-clip"><span class="sm-l">Education</span></span></a></li>
+      <li><a href="#experience" data-sky="plough" data-note="People-facing roles at Concern Worldwide, Croke Park and HelloFresh."><span class="sm-n">05</span><span class="sm-clip"><span class="sm-l">Experience</span></span></a></li>
+      <li><a href="#contact" data-sky="ursaMinor" data-note="Open to summer 2027 internships. Email, GitHub, LinkedIn and CV."><span class="sm-n">06</span><span class="sm-clip"><span class="sm-l">Contact</span></span></a></li>
     </ol>
     <div class="sm-foot">
       <p class="sm-status">Open to summer 2027 internships</p>
@@ -333,7 +343,6 @@ html:not(.ready) *, html:not(.ready) *::before, html:not(.ready) *::after { tran
   <p class="vh" role="status" aria-live="polite" id="live"></p>
 </main>
 
-<canvas class="sparks" id="sparks" aria-hidden="true"></canvas>
 
 <script src="assets/data/all-rounder.js"></script>
 <script src="assets/data/constellations.js"></script>

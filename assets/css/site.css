@@ -56,7 +56,7 @@ h1, h2, h3 { font-family: var(--display); font-weight: 500; letter-spacing: .03e
 p, dl, dd, figure { margin: 0; }
 p, figcaption, caption, li { text-wrap: pretty; }
 ul, ol { margin: 0; padding: 0; list-style: none; }
-.vh { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .skip { position: fixed; left: var(--s-2); top: var(--s-2); z-index: 100; padding: 12px 18px; background: var(--thread); color: var(--on-thread); font-weight: 600; transform: translateY(-200%); }
 .skip:focus { transform: none; }
 .wrap { width: min(1200px, calc(100% - 2 * var(--gutter))); margin-inline: auto; }
@@ -246,7 +246,7 @@ code { font: 400 .875em var(--data); color: var(--text); overflow-wrap: anywhere
 }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  *, *::before, *::after { transition-duration: 0ms !important; }
+  *, *::before, *::after { transition-duration: 0ms; }
 }
 
 /* =====================================================================
@@ -260,8 +260,9 @@ code { font: 400 .875em var(--data); color: var(--text); overflow-wrap: anywhere
 .site, .site.scrolled { left: 0; padding-inline: var(--gutter); }
 .site { z-index: 60; background: transparent; border-bottom: 1px solid transparent; transition: background var(--dur-base) var(--ease-out), border-color var(--dur-base); }
 .site.scrolled { background: var(--ground); border-bottom-color: var(--line); }   /* clear over the hero; solid once the name has gone */
-html.menu-open { overflow: hidden; padding-right: var(--sbw, 0px); }
-.menu-open .site { padding-right: calc(var(--gutter) + var(--sbw, 0px)); }
+/* the scroll lock is applied two frames after the menu starts moving (main.js), so it cannot hold up the first frame */
+html.menu-lock { overflow: hidden; padding-right: var(--sbw, 0px); }
+.menu-lock .site { padding-right: calc(var(--gutter) + var(--sbw, 0px)); }
 .site .cv { margin-left: auto; }
 .menu-btn { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 16px; background: none; color: var(--text); border: 1px solid var(--line-strong); font: 500 .9375rem var(--body); cursor: pointer; transition: border-color var(--dur-fast), color var(--dur-base); }
 .menu-btn:hover { border-color: var(--thread); }
@@ -269,8 +270,13 @@ html.menu-open { overflow: hidden; padding-right: var(--sbw, 0px); }
 .menu-lines i { display: block; width: 14px; height: 1.5px; background: currentColor; transition: transform var(--dur-base) var(--ease-out); }
 .menu-open .menu-lines i:first-child { transform: translateY(2.75px) rotate(45deg); }
 .menu-open .menu-lines i:last-child { transform: translateY(-2.75px) rotate(-45deg); }
-.menu-open .site, .menu-open .site.scrolled { background: transparent; border-bottom-color: transparent; }
+/* The header sits above the menu so its buttons stay usable, which means its solid banner would cover the top of the
+   panel. So the banner clears at once when the menu opens, and stays clear while the panel slides away again
+   (menu-closing, set by main.js), instead of fading across the slide in either direction. */
+.menu-open .site, .menu-open .site.scrolled, .menu-closing .site, .menu-closing .site.scrolled { background: transparent; border-bottom-color: transparent; transition: none; }
 .menu-open .site .cv, .menu-open .menu-btn { color: var(--ground); border-color: rgba(14, 8, 25, .35); }
+/* closing: the buttons turn light again a moment later, once the panel has slid out from under them */
+.menu-closing .site .cv, .menu-closing .menu-btn { transition: color .2s var(--ease-out) .12s, border-color .2s var(--ease-out) .12s; }
 
 /* staggered menu: violet, lilac, then the card-stock panel; items rise in turn */
 .sm { position: fixed; inset: 0; z-index: 50; pointer-events: none; }
@@ -279,6 +285,10 @@ html.menu-open { overflow: hidden; padding-right: var(--sbw, 0px); }
 .sm[data-open="true"] .sm-scrim { opacity: 1; }
 .sm-layers span, .sm-panel { position: absolute; top: 0; right: 0; bottom: 0; width: min(560px, 100%); transform: translateX(100%); }
 .sm-layers span { transition: transform .5s var(--ease-out); }
+/* promoted to their own layers just before they move (main.js adds .primed on hover, focus or touch of the button) */
+.sm.primed .sm-layers span, .sm.primed .sm-panel { will-change: transform; }
+.sm.primed .sm-scrim { will-change: opacity; }
+.sm-panel { contain: layout paint; backface-visibility: hidden; }
 .sm-layers span:nth-child(1) { background: var(--thread-2); transition-delay: .14s; }
 .sm-layers span:nth-child(2) { background: var(--thread); transition-delay: .07s; }
 .sm-panel { display: flex; flex-direction: column; justify-content: space-between; gap: var(--s-5); padding: 112px clamp(1.5rem, 4vw, 3.5rem) 36px; background: var(--band); color: var(--ground); overflow-y: auto; visibility: hidden; transition: transform .55s var(--ease-out), visibility 0s linear .7s; }
@@ -303,6 +313,20 @@ html.menu-open { overflow: hidden; padding-right: var(--sbw, 0px); }
 .sm-foot ul { display: flex; flex-wrap: wrap; gap: 0 var(--s-4); }
 .sm-foot a { display: inline-flex; align-items: center; min-height: 44px; color: var(--ground); text-decoration-color: rgba(14, 8, 25, .35); }
 @media (max-width: 600px) { .menu-open .mark { color: var(--ground); } }
+
+/* menu previews: a card beside the panel for the chapter being pointed at. It carries the chapter's label and headline,
+   a one-line note and one of its constellations woven on a small loom. Mouse and keyboard, wide screens only. */
+.sm-preview { position: absolute; top: 0; right: calc(min(560px, 100%) + 28px); width: 300px; pointer-events: none; transform: translate3d(0, var(--y, 120px), 0); transition: transform .5s var(--ease-out); }
+.sm-card { padding: 0 0 18px; background: var(--ground-2); border: 1px solid var(--line-strong); box-shadow: 0 12px 30px rgba(0, 0, 0, .5); color: var(--text); opacity: 0; transform: translateX(14px); transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-base) var(--ease-out); }
+.sm-preview.on .sm-card { opacity: 1; transform: none; transition: opacity var(--dur-base) var(--ease-out), transform .4s var(--ease-out); }
+.sm-card canvas { display: block; width: 100%; aspect-ratio: 300 / 172; border-bottom: 1px solid var(--line); }
+.sm-card p { margin: 0; padding: 0 18px; }
+.sm-card .sm-card-k { margin-top: 16px; font: 400 .6875rem/1.4 var(--data); letter-spacing: .04em; color: var(--thread); }
+.sm-card-k::before { content: ""; display: inline-block; width: 10px; height: 2px; margin-right: 8px; vertical-align: .3em; background: var(--thread-2); }
+.sm-card .sm-card-h { margin-top: 8px; font: 500 1.25rem/1.15 var(--display); letter-spacing: .02em; color: var(--pearl); }
+.sm-card .sm-card-n { margin-top: 10px; font-size: .875rem; line-height: 1.5; color: var(--muted); }
+.sm-card .sm-card-sky { margin-top: 12px; font: 400 .6875rem/1.4 var(--data); letter-spacing: .04em; color: var(--muted); }
+@media (max-width: 1039px), (hover: none) { .sm-preview { display: none; } }
 
 /* hero: the network is the one object; name and caption sit along the bottom */
 .hero { display: block; min-height: max(100svh, 680px); }
@@ -370,7 +394,7 @@ details.is-animating { overflow: hidden; }
 .pre { opacity: 0; }
 
 /* click sparks: short threads that fly from the click */
-.sparks { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 70; pointer-events: none; }
+.spark { position: fixed; width: 104px; height: 104px; z-index: 70; pointer-events: none; }
 
 @media (max-width: 900px) {
   .lead-grid, .lead-copy { grid-template-columns: 1fr; }
@@ -435,3 +459,15 @@ details.is-animating { overflow: hidden; }
 @media (max-width: 860px) {
   .stage { min-height: min(92svh, 780px); }
 }
+
+/* =====================================================================
+   ITERATION 3 · the night sky
+   ===================================================================== */
+
+/* Text over the sky keeps a soft halo of the ground colour instead of a cut-out box: it clears the dots just around
+   the letters and has no edge of its own. Anything on a light surface opts out. */
+main { text-shadow: 0 0 4px var(--ground), 0 0 12px var(--ground); }
+main .btn:not(.ghost), main .card { text-shadow: none; }
+
+/* phones: the network stands upright, so each output's reading hangs under its neuron on two lines */
+.labels.upright .out { transform: translateX(-50%); padding-left: 0; width: 12ch; text-align: center; white-space: pre-line; line-height: 1.35; }

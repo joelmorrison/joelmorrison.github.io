@@ -1,0 +1,2 @@
+# patch files are for applying, not for committing
+*.patch

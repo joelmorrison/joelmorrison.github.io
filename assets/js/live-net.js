@@ -15,7 +15,9 @@
     constructor(stage, net, opts) {
       this.stage = stage;
       this.net = net;
-      this.o = Object.assign({ cell: 6, layout: null, labels: null, clock: null, isReady: () => true }, opts);
+      // stack: each output label reads as two lines, name then value (the upright network on phones, where the
+      // labels hang under the outputs and have to be narrow)
+      this.o = Object.assign({ cell: 6, layout: null, labels: null, clock: null, stack: false, isReady: () => true }, opts);
       this.c = document.createElement('canvas');
       this.c.className = 'live';
       this.c.setAttribute('aria-hidden', 'true');
@@ -184,10 +186,11 @@
       if (this.o.labels && (now - this.lastLabel > 120 || !this.animated)) {
         this.lastLabel = now;
         const [steer, acc, brake] = out;
+        const gap = this.o.stack ? '\n' : ' ';
         const text = [
-          `steering ${Math.abs(steer) < 0.05 ? 'straight' : (steer > 0 ? '← ' : '→ ') + Math.abs(steer).toFixed(2)}`,   // ← is the car's left
-          `accelerator ${acc > 0 ? 'on' : 'off'}`,
-          `brake ${brake > 0 ? 'on' : 'off'}`,
+          `steering${gap}${Math.abs(steer) < 0.05 ? 'straight' : (steer > 0 ? '← ' : '→ ') + Math.abs(steer).toFixed(2)}`,   // ← is the car's left
+          `accelerator${gap}${acc > 0 ? 'on' : 'off'}`,
+          `brake${gap}${brake > 0 ? 'on' : 'off'}`,
         ];
         this.o.labels.forEach((el, k) => { if (el && el.textContent !== text[k]) el.textContent = text[k]; });
       }

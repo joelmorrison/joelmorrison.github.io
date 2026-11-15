@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  const { networkLayout, drawNetwork, drawTrack, drawSilk } = window.LoomPictures;
+  const { networkLayout, nodeRadius, drawNetwork, drawTrack, drawSilk, drawFigure } = window.LoomPictures;
   const NET = window.ALL_ROUNDER;
   const root = document.documentElement;
   const cssVar = n => getComputedStyle(root).getPropertyValue(n).trim();
@@ -28,11 +28,13 @@
     x.fillStyle = g; x.fillRect(0, 0, w, h);
     x.globalCompositeOperation = 'source-over';
     // the output labels need room for their longest live reading, "steering straight"
-    const LABEL = narrow ? 146 : 186;
+    const LABEL = 186;
     if (narrow) {
-      // phones: the network fills the top of the screen, as wide as its labels allow
-      const bh = Math.round(Math.min(w * 0.82, window.innerHeight * 0.44, 420)), bx = w * 0.06;
-      heroBox = { x: bx, y: 80, w: Math.min(w * 0.66, bh / 0.62, (w - 20 - LABEL - bx) / 0.92), h: bh };
+      // phones: the network stands upright, inputs along the top and the three outputs along the bottom, using the
+      // full width, so each layer has room and the connections between them can be seen. Labels sit under the outputs.
+      const pad = (parseFloat(getComputedStyle(weave.parentElement).paddingLeft) || 20) + 8;
+      const bh = Math.round(Math.min(window.innerHeight * 0.4, w * 0.92, 360));
+      heroBox = { x: pad, y: 100, w: w - pad * 2, h: bh, upright: true };
     } else {
       // the network is the first thing you see: as large as the screen allows above the name,
       // centred on what you see (three columns of neurons plus their labels)
@@ -44,15 +46,18 @@
     drawNetwork(x, heroBox, NET, cell);
     placeLabels();
     if (liveNet) liveNet.layout(heroBox, networkLayout(heroBox));
-    weave.parentElement.style.setProperty('--net-bottom', Math.round(heroBox.y + heroBox.h + 16) + 'px');
+    // on phones the copy starts below the network and its labels
+    weave.parentElement.style.setProperty('--net-bottom', Math.round(heroBox.y + heroBox.h + (heroBox.upright ? 62 : 16)) + 'px');
   }
 
   function placeLabels() {
     if (!heroBox) return;
-    const outs = networkLayout(heroBox)[2];
+    const outs = networkLayout(heroBox)[2], up = !!heroBox.upright;
     const mid = outs[1].y, step = Math.max(outs[1].y - outs[0].y, 22);   // at least 22px between labels
-    labels.innerHTML = outs.map((p, k) => `<span class="out" style="left:${p.x}px;top:${mid + (k - 1) * step}px">${NET.outputs[k]}</span>`).join('');
-    if (liveNet) liveNet.o.labels = [...labels.querySelectorAll('.out')];
+    const below = nodeRadius(heroBox, 6) + 10;                           // upright: each label hangs under its own output
+    labels.classList.toggle('upright', up);
+    labels.innerHTML = outs.map((p, k) => `<span class="out" style="left:${p.x}px;top:${up ? p.y + below : mid + (k - 1) * step}px">${NET.outputs[k]}</span>`).join('');
+    if (liveNet) { liveNet.o.labels = [...labels.querySelectorAll('.out')]; liveNet.o.stack = up; liveNet.lastLabel = 0; }
   }
 
   /* ---------- the entry: the picture develops out of scattered dots, from the middle of the network outwards ---------- */
@@ -107,10 +112,11 @@
     // all work: hovering Crash Course's row weaves a small copy of its track beside the pointer
     const preview = document.querySelector('.preview');
     if (FINE && preview) {
-      const pv = new window.Loom(document.getElementById('preview-track'), {
+      let pv = null;   // woven the first time a row is hovered, so it never competes with the hero's entrance
+      const loom = () => pv || (pv = new window.Loom(document.getElementById('preview-track'), {
         cell: 4, rowMs: 7, eager: true, particles: false,
         draw: (x, w, h) => drawTrack(x, { x: w * 0.08, y: h * 0.08, w: w * 0.84, h: h * 0.84 }, NET.technical_track, 4),
-      });
+      }));
       let tx = 0, ty = 0, px = 0, py = 0, raf = 0, hidden = 0;
       const glide = () => {
         px += (tx - px) * 0.22; py += (ty - py) * 0.22;
@@ -128,7 +134,8 @@
       document.querySelectorAll('.row[data-preview] .row-head').forEach(head => {
         head.addEventListener('pointerenter', e => {
           aim(e, !preview.classList.contains('on'));
-          if (performance.now() - hidden > 600 && pv.w) pv.build(false);   // weave it in again after a pause
+          if (pv && performance.now() - hidden > 600 && pv.w) pv.build(false);   // weave it in again after a pause
+          loom();
           preview.classList.add('on');
         });
         head.addEventListener('pointermove', e => aim(e));
@@ -151,21 +158,80 @@
   const mainEl = document.getElementById('main');
   const skipLink = document.querySelector('.skip');
   const isOpen = () => sm.dataset.open === 'true';
+  const twoFrames = fn => requestAnimationFrame(() => requestAnimationFrame(fn));
+  let closing = 0, unprime = 0;
+  // the sliding layers get their own compositor layers just before they are needed, and give them back afterwards
+  const prime = () => { clearTimeout(unprime); sm.classList.add('primed'); };
+  ['pointerenter', 'focus', 'touchstart'].forEach(t => menuBtn.addEventListener(t, prime, { passive: true }));
+  menuBtn.addEventListener('pointerleave', () => { if (!isOpen()) unprime = setTimeout(() => sm.classList.remove('primed'), 400); });
   const setMenu = open => {
+    prime();
     // locking the page hides its scrollbar; pad by its width so nothing behind the menu shifts
     if (open) root.style.setProperty('--sbw', (innerWidth - root.clientWidth) + 'px');
+    // 1. only what starts the slide happens now, so the first frame is not held up
     sm.dataset.open = String(open);
     root.classList.toggle('menu-open', open);
+    // while the panel slides away the header stays clear and its buttons stay dark: the banner must not cover the panel
+    clearTimeout(closing); root.classList.toggle('menu-closing', !open);
+    if (!open) closing = setTimeout(() => root.classList.remove('menu-closing'), 460);
     menuBtn.setAttribute('aria-expanded', String(open));
     menuWord.textContent = open ? 'Close' : 'Menu';
-    mainEl.inert = open;            // keep keyboard focus inside the header and the open menu
-    skipLink.inert = open;
     if (open) nav.querySelector('a').focus({ preventScroll: true });
+    else { peek(null); unprime = setTimeout(() => sm.classList.remove('primed'), 900); }
+    // 2. the costly part (locking the page's scroll, taking the page out of the tab order) waits two frames,
+    //    by which time the slide is already running on the compositor and cannot be held up by it
+    twoFrames(() => {
+      if (isOpen() !== open) return;
+      root.classList.toggle('menu-lock', open);
+      mainEl.inert = open;            // keep keyboard focus inside the header and the open menu
+      skipLink.inert = open;
+    });
   };
   menuBtn.addEventListener('click', () => setMenu(!isOpen()));
   sm.querySelector('.sm-scrim').addEventListener('click', () => setMenu(false));
   nav.addEventListener('click', e => { if (e.target.closest('a')) setMenu(false); });
   addEventListener('keydown', e => { if (e.key === 'Escape' && isOpen()) { setMenu(false); menuBtn.focus(); } });
+
+  /* ---------- menu previews: pointing at a chapter shows a card for it beside the menu ----------
+     The card carries the chapter's own label and headline, read from the page so they cannot go stale, a one-line
+     note, and one of the chapter's constellations woven on a small loom, the way Crash Course's row weaves its track.
+     Mouse and keyboard only, and only where there is room beside the panel. */
+  const card = document.querySelector('.sm-preview');
+  const roomy = matchMedia('(min-width: 1040px)');
+  let skyLoom = null, shown = null;
+  function peek(a) {
+    if (!card) return;
+    if (!a || !FINE || !roomy.matches) { card.classList.remove('on'); shown = null; return; }
+    const first = !card.classList.contains('on');
+    if (a !== shown) {
+      shown = a;
+      const sec = document.querySelector(a.getAttribute('href')), con = (window.CONSTELLATIONS || {})[a.dataset.sky];
+      const label = sec && sec.querySelector('.chapter'), head = sec && sec.querySelector('h2');
+      card.querySelector('.sm-card-k').textContent = label ? label.textContent : '';
+      card.querySelector('.sm-card-h').textContent = head ? [...head.querySelectorAll('.line')].map(l => l.textContent.trim()).join(' ') || head.textContent.trim() : '';
+      card.querySelector('.sm-card-n').textContent = a.dataset.note || '';
+      card.querySelector('.sm-card-sky').textContent = con ? 'Sky · ' + con.name : '';
+      if (con && window.Field && window.Field.figure) {
+        const fig = window.Field.figure(con);
+        const draw = (x, w, h) => drawFigure(x, { x: w * 0.14, y: h * 0.14, w: w * 0.72, h: h * 0.72 }, fig, 4);
+        if (!skyLoom) skyLoom = new window.Loom(card.querySelector('canvas'), { cell: 4, rowMs: 6, eager: true, particles: false, warp: false, draw });
+        else { skyLoom.o.draw = draw; if (skyLoom.w) skyLoom.build(false); }   // weave the new figure in from the top
+      }
+    }
+    // level with the item, kept on screen; it glides between items and snaps into place the first time
+    const r = a.getBoundingClientRect(), hgt = card.offsetHeight;
+    const y = Math.round(Math.max(96, Math.min(innerHeight - hgt - 24, r.top + r.height / 2 - hgt / 2)));
+    if (first || REDUCED) { card.style.transition = 'none'; card.style.setProperty('--y', y + 'px'); void card.offsetWidth; card.style.transition = ''; }
+    else card.style.setProperty('--y', y + 'px');
+    card.classList.add('on');
+  }
+  const smList = nav.querySelector('.sm-list');
+  smList.querySelectorAll('a').forEach(a => {
+    a.addEventListener('pointerenter', () => { if (isOpen()) peek(a); });
+    a.addEventListener('focus', () => { if (isOpen() && a.matches(':focus-visible')) peek(a); });
+  });
+  smList.addEventListener('pointerleave', () => peek(null));
+  smList.addEventListener('focusout', e => { if (!smList.contains(e.relatedTarget)) peek(null); });
 
   // the menu marks the chapter you're reading
   const navLinks = [...nav.querySelectorAll('.sm-list a')];
@@ -242,37 +308,36 @@
   /* ---------- phones: fold the lead project's notes so the claim, table and links stay close ---------- */
   if (matchMedia('(max-width: 900px)').matches) document.querySelectorAll('details[data-fold]').forEach(d => { d.open = false; });
 
-  /* ---------- click sparks: short threads fly out from a click (mouse only, never with reduced motion) ---------- */
-  const sparks = document.getElementById('sparks');
-  if (FINE && !REDUCED && sparks) {
-    const sx = sparks.getContext('2d');
+  /* ---------- click sparks: short threads fly out from a click (mouse only, never with reduced motion) ----------
+     Each click gets its own small canvas at the pointer, removed when the threads have gone. A full-screen canvas
+     redrawn every frame was costing the same frames the menu needs when its button is clicked. */
+  if (FINE && !REDUCED) {
     const col = { thread: cssVar('--thread'), pearl: cssVar('--pearl'), ground: cssVar('--ground') };
-    let list = [], raf = 0, dpr = 1;
-    const fit = () => { dpr = Math.min(devicePixelRatio || 1, 2); sparks.width = Math.round(innerWidth * dpr); sparks.height = Math.round(innerHeight * dpr); };
-    fit(); addEventListener('resize', fit);
-    const LIFE = 480;
-    const tick = now => {
-      sx.setTransform(dpr, 0, 0, dpr, 0, 0); sx.clearRect(0, 0, innerWidth, innerHeight);
-      list = list.filter(s => now - s.t0 < LIFE);
-      sx.lineWidth = 2; sx.lineCap = 'square';
-      for (const s of list) {
-        const p = Math.max(0, (now - s.t0) / LIFE), e = 1 - Math.pow(1 - p, 3);
-        const d0 = 5 + e * s.reach, d1 = d0 + 10 * (1 - p) + 2, cx = Math.cos(s.a), cy = Math.sin(s.a);
-        sx.globalAlpha = 1 - p * p; sx.strokeStyle = s.col;
-        sx.beginPath(); sx.moveTo(s.x + cx * d0, s.y + cy * d0); sx.lineTo(s.x + cx * d1, s.y + cy * d1); sx.stroke();
-      }
-      sx.globalAlpha = 1;
-      raf = list.length ? requestAnimationFrame(tick) : 0;
-    };
+    const LIFE = 480, SIZE = 104;
     addEventListener('pointerdown', e => {
       // the cloths keep press-and-hold for the linen tester, so they don't spark
       if (e.button !== 0 || e.pointerType !== 'mouse' || e.target.closest('.weave, #track')) return;
-      const onCard = !!e.target.closest('.sm-panel'), a0 = Math.random() * Math.PI, now = performance.now();
-      for (let k = 0; k < 8; k++) list.push({
-        x: e.clientX, y: e.clientY, a: a0 + k * Math.PI / 4, t0: now, reach: 16 + (k % 2) * 8,
-        col: onCard ? col.ground : (k % 2 ? col.pearl : col.thread),
-      });
-      if (!raf) raf = requestAnimationFrame(tick);
+      const onCard = !!e.target.closest('.sm-panel'), a0 = Math.random() * Math.PI, t0 = performance.now();
+      const dpr = Math.min(devicePixelRatio || 1, 2), cv = document.createElement('canvas');
+      cv.className = 'spark'; cv.setAttribute('aria-hidden', 'true');
+      cv.width = cv.height = Math.round(SIZE * dpr);
+      cv.style.left = (e.clientX - SIZE / 2) + 'px'; cv.style.top = (e.clientY - SIZE / 2) + 'px';
+      document.body.appendChild(cv);
+      const sx = cv.getContext('2d'), c = SIZE / 2;
+      const tick = now => {
+        const p = Math.max(0, (now - t0) / LIFE);
+        if (p >= 1) { cv.remove(); return; }
+        const ease = 1 - Math.pow(1 - p, 3);
+        sx.setTransform(dpr, 0, 0, dpr, 0, 0); sx.clearRect(0, 0, SIZE, SIZE);
+        sx.lineWidth = 2; sx.lineCap = 'square'; sx.globalAlpha = 1 - p * p;
+        for (let k = 0; k < 8; k++) {
+          const ang = a0 + k * Math.PI / 4, d0 = 5 + ease * (16 + (k % 2) * 8), d1 = d0 + 10 * (1 - p) + 2, cx = Math.cos(ang), cy = Math.sin(ang);
+          sx.strokeStyle = onCard ? col.ground : (k % 2 ? col.pearl : col.thread);
+          sx.beginPath(); sx.moveTo(c + cx * d0, c + cy * d0); sx.lineTo(c + cx * d1, c + cy * d1); sx.stroke();
+        }
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
     });
   }
 

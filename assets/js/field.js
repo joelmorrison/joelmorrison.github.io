@@ -5,8 +5,8 @@
    (assets/data/constellations.js) and woven by the loom's own rule: a star's core is a stack of weft floats,
    its halo is halftone dots sized by tone, and the lines between stars are dotted threads. Brighter stars
    are bigger, and only the brightest reach pearl. Around each figure sit the fainter stars really found there,
-   and behind it the Milky Way, drawn where it really runs. Wherever the page has text or a picture the sky
-   dims to faint dots, so the stars sit behind the words instead of fighting them.
+   and behind it the Milky Way, drawn where it really runs. Where the page is thick with text or pictures the sky
+   thins out gradually, with no edge to see, so the stars sit behind the words instead of fighting them.
    Scrolling drives everything: a constellation lights star by star, brightest first, then its lines draw
    from star to star, and the chapter's other constellations follow it; as the chapter ends they unweave the
    same way and the next sky takes their place, announced by one shooting star. Each constellation turns a few
@@ -15,7 +15,9 @@
    While you scroll fast the dots draw out into floats; near a mouse pointer the lit cloth lifts.
    Reduced motion gets each sky whole and still, with no shooting star.
    The field times its own drawing: on a device that cannot keep up it first drops the Milky Way, then the
-   faint stars and the sharpness, and it never drops the constellations. Hand-written, no dependencies. */
+   faint stars and the sharpness, and it never drops the constellations. It also stays out of the way of the hero's
+   entrance: nothing is measured or worked out until that has finished, or until the first scroll.
+   Hand-written, no dependencies. */
 (function () {
   'use strict';
 
@@ -108,7 +110,8 @@
         turn: 7,           // degrees a constellation turns through one chapter
         drift: 46,         // px a constellation drifts up through one chapter
         follow: 0.3,       // how far behind the one before it each constellation in a chapter starts
-        hush: 0.8,         // how much the sky dims behind text and pictures
+        hush: 0.7,         // how much the sky thins out where the page is thick with text or pictures
+        wait: 2800,        // ms to leave the hero's entrance alone before measuring the page and working out the Milky Way
         milkyWay: true,    // the Milky Way behind each constellation that sits on it
         stars: true,       // the fainter real stars around each constellation
         meteor: true,      // one shooting star as each new sky arrives
@@ -122,19 +125,16 @@
       this.vel = 0; this.stretch = 0; this.lastY = scrollY; this.lastT = 0; this.running = false;
       this.now = 0; this.live = -1; this.met = null; this.shots = 0; this.late = 0;
       this.ptr = { x: 0, y: 0, tx: 0, ty: 0, a: 0, on: false };
+      this.armed = false; this.map = null;
       this.resize();
-      // work out each figure's Milky Way map ahead of time, one per idle moment, so no chapter has to wait for it
-      if (this.o.milkyWay && this.level > 1) {
-        const todo = [].concat(...this.skies.filter(Boolean)).map(c => c.sky.milky);
-        const idle = window.requestIdleCallback ? fn => requestIdleCallback(fn, { timeout: 1500 }) : fn => setTimeout(fn, 60);
-        const next = () => { const made = todo.shift(); if (!made) return; if (made.done === undefined) made.done = made(); idle(next); };
-        idle(next);
-      }
+      // the heavy preparation waits for the hero's entrance to finish, or for the first scroll, whichever comes first
+      setTimeout(() => (window.requestIdleCallback ? requestIdleCallback(() => this.arm(), { timeout: 1200 }) : this.arm()), this.o.wait);
       addEventListener('resize', () => { this.resize(); this.kick(); }, { passive: true });
-      addEventListener('scroll', () => this.kick(), { passive: true });
+      addEventListener('scroll', () => { if (!this.armed) this.arm(); this.kick(); }, { passive: true });
       // when the page changes height, re-measure the chapters now and re-map the text once it settles
       new ResizeObserver(() => {
         this.place(); this.kick();
+        if (!this.armed) return;
         clearTimeout(this.late); this.late = setTimeout(() => { this.survey(); this.kick(); }, 140);
       }).observe(document.body);
       if (FINE.matches) {
@@ -147,6 +147,21 @@
         }, { passive: true });
         document.documentElement.addEventListener('pointerleave', () => { this.ptr.on = false; this.kick(); });
       }
+    }
+
+    // measure the page and work out the Milky Way maps: done once, after the entrance, never during it
+    arm() {
+      if (this.armed) return;
+      this.armed = true;
+      this.survey();
+      // each figure's Milky Way map is worked out ahead of time, one per idle moment, so no chapter has to wait for it
+      if (this.o.milkyWay && this.level > 1) {
+        const todo = [].concat(...this.skies.filter(Boolean)).map(c => c.sky.milky);
+        const idle = window.requestIdleCallback ? fn => requestIdleCallback(fn, { timeout: 1500 }) : fn => setTimeout(fn, 60);
+        const next = () => { const made = todo.shift(); if (!made) return; if (made.done === undefined) made.done = made(); idle(next); };
+        idle(next);
+      }
+      this.kick();
     }
 
     resize() {
@@ -167,7 +182,7 @@
       // one scratch sheet of tone, big enough for the largest constellation, reused every frame
       const side = Math.ceil((base * 1.12 + 80) / this.o.cell) + 2;
       this.sheet = new Float32Array(side * side);
-      this.place(); this.survey();
+      this.place(); if (this.armed) this.survey();
       this.q = this.q.map(() => null);
       this.draw();
     }
@@ -178,15 +193,17 @@
       this.hs = this.sections.map(s => Math.max(1, s.offsetHeight));
     }
 
-    // Map where the page has text and pictures, so the sky can dim behind them.
-    // A coarse grid over the whole page: 1 where something sits, 0 where the cloth is bare, softened at the edges.
+    // Map how thick the page is with text and pictures, so the sky can thin out there.
+    // A coarse grid over the whole page, blurred so widely that it has no edges: a paragraph or a table reads as a
+    // soft cloud near 1, a lone label barely registers, and the gaps between blocks stay near 0. The text itself is
+    // kept readable by its own soft halo (site.css), so this only has to keep the sky from crowding dense copy.
     survey() {
       const g = 12, cols = Math.ceil(this.w / g) + 1, rows = Math.ceil(document.documentElement.scrollHeight / g) + 1;
-      let m = new Float32Array(cols * rows);
-      const mark = (r, pad) => {
+      const m = new Float32Array(cols * rows);
+      const mark = r => {
         if (r.width < 2 || r.height < 2) return;
-        const x0 = Math.max(0, Math.floor((r.left - pad) / g)), x1 = Math.min(cols - 1, Math.floor((r.right + pad) / g));
-        const y0 = Math.max(0, Math.floor((r.top + scrollY - pad) / g)), y1 = Math.min(rows - 1, Math.floor((r.bottom + scrollY + pad) / g));
+        const x0 = Math.max(0, Math.floor(r.left / g)), x1 = Math.min(cols - 1, Math.floor(r.right / g));
+        const y0 = Math.max(0, Math.floor((r.top + scrollY) / g)), y1 = Math.min(rows - 1, Math.floor((r.bottom + scrollY) / g));
         for (let y = y0; y <= y1; y++) m.fill(1, y * cols + x0, y * cols + x1 + 1);
       };
       if (this.content) {
@@ -194,16 +211,25 @@
         for (let n = walk.nextNode(); n; n = walk.nextNode()) {
           if (!n.nodeValue.trim()) continue;
           range.selectNodeContents(n);
-          for (const r of range.getClientRects()) mark(r, 12);
+          for (const r of range.getClientRects()) mark(r);
         }
-        this.content.querySelectorAll('canvas, img, svg, video').forEach(el => mark(el.getBoundingClientRect(), 6));
+        this.content.querySelectorAll('canvas, img, svg, video').forEach(el => mark(el.getBoundingClientRect()));
       }
-      // soften the edges so a star fades behind a line of text: two passes of a 3-wide blur, across then down
-      const o = new Float32Array(m.length);
+      // two passes of a wide running-average blur, across then down: about 70px of fade in every direction
+      const o = new Float32Array(m.length), R = 3, W = 2 * R + 1;
       for (let pass = 0; pass < 2; pass++) {
-        for (let y = 0; y < rows; y++) { const r = y * cols; for (let x = 0; x < cols; x++) o[r + x] = (m[r + Math.max(0, x - 1)] + m[r + x] + m[r + Math.min(cols - 1, x + 1)]) / 3; }
-        for (let y = 0; y < rows; y++) { const r = y * cols, a = Math.max(0, y - 1) * cols, b = Math.min(rows - 1, y + 1) * cols; for (let x = 0; x < cols; x++) m[r + x] = (o[a + x] + o[r + x] + o[b + x]) / 3; }
+        for (let y = 0; y < rows; y++) {
+          const r = y * cols; let sum = 0;
+          for (let x = -R; x <= R; x++) sum += m[r + Math.max(0, Math.min(cols - 1, x))];
+          for (let x = 0; x < cols; x++) { o[r + x] = sum / W; sum += m[r + Math.min(cols - 1, x + R + 1)] - m[r + Math.max(0, x - R)]; }
+        }
+        for (let x = 0; x < cols; x++) {
+          let sum = 0;
+          for (let y = -R; y <= R; y++) sum += o[Math.max(0, Math.min(rows - 1, y)) * cols + x];
+          for (let y = 0; y < rows; y++) { m[y * cols + x] = sum / W; sum += o[Math.min(rows - 1, y + R + 1) * cols + x] - o[Math.max(0, y - R) * cols + x]; }
+        }
       }
+      for (let k = 0; k < m.length; k++) m[k] = Math.min(1, m[k] * 1.5);   // a full paragraph reaches 1
       this.map = { m, g, cols, rows };
     }
 
@@ -297,9 +323,10 @@
       ctx.fillStyle = this.pearl; ctx.fill(ink.pearl);
     }
 
-    // how much the page covers this spot (0 bare cloth, 1 text or a picture)
+    // how thick the page is around this spot (0 bare cloth, 1 the middle of a block of text or a picture)
     cover(x, y) {
-      const map = this.map, my = Math.floor((y + scrollY) / map.g);
+      const map = this.map; if (!map) return 0;
+      const my = Math.floor((y + scrollY) / map.g);
       return my >= 0 && my < map.rows ? map.m[my * map.cols + Math.floor(x / map.g)] : 0;
     }
 
@@ -321,6 +348,7 @@
       const i0 = Math.max(0, Math.floor((b.cx - b.s * R) / cell)), i1 = Math.min(Math.ceil(w / cell), Math.ceil((b.cx + b.s * R) / cell));
       const j0 = Math.max(0, Math.floor((cy - b.s * R - oy) / cell)), j1 = Math.min(Math.ceil(h / cell) + 1, Math.ceil((cy + b.s * R - oy) / cell));
       const map = this.map, sy = scrollY, min = 0.035;
+      if (!map) return;
       for (let j = j0; j < j1; j++) {
         const y = oy + j * cell + cell / 2, dy = (y - cy) / b.s;
         const my = Math.floor((y + sy) / map.g), row = my >= 0 && my < map.rows ? my * map.cols : -1;
@@ -330,7 +358,7 @@
           if (gi < 0 || gj < 0 || gi >= GRID || gj >= GRID) continue;
           let t = m[gj * GRID + gi] * up;
           if (t < min) continue;
-          if (row >= 0) { t *= 1 - 0.92 * map.m[row + Math.floor(x / map.g)]; if (t < min) continue; }
+          if (row >= 0) { t *= 1 - 0.8 * map.m[row + Math.floor(x / map.g)]; if (t < min) continue; }
           const s = cell * 1.0988 * Math.pow(t, 0.75);   // always small, so always a square
           ctx.fillRect(x - s / 2, y - s / 2, s, s);
         }
@@ -398,7 +426,7 @@
             let t = T[gj * gw + gi];
             if (t < 0.03) continue;
             const x = (gi + i0) * cell + half;
-            // behind text or a picture the sky drops to faint dots
+            // where the page is thick with text the sky thins out
             const hush = this.cover(x, y);
             if (hush > 0.01) { t *= 1 - o.hush * hush; if (t < 0.03) continue; }
             if (lift) { const d = Math.hypot(x - p.x, y - p.y) / 150; if (d < 1) t *= 1 + 0.6 * p.a * (1 - d) * (1 - d); }
@@ -455,6 +483,9 @@
       }
     }
   }
+
+  // a constellation as a flat picture in a unit box, for anything else that wants to draw one (the menu's preview cards)
+  Field.figure = con => { const p = project(con, 0); return { stars: p.stars.map(s => ({ x: s.x, y: s.y, b: (s.peak - 0.4) / 0.6 })), lines: p.lines }; };
 
   window.Field = Field;
 })();
