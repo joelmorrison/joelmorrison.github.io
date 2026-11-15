@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  const { networkLayout, drawNetwork, drawTrack, drawSilk, drawRings, drawEnvelope } = window.LoomPictures;
+  const { networkLayout, nodeRadius, drawNetwork, drawTrack, drawSilk, drawRings, drawEnvelope } = window.LoomPictures;
   const NET = window.ALL_ROUNDER;
   const root = document.documentElement;
   const cssVar = n => getComputedStyle(root).getPropertyValue(n).trim();
@@ -17,9 +17,14 @@
   const labels = document.getElementById('labels');
   let heroBox = null;
   let liveNet = null;   // the live layer: replays the all-rounder's real lap through its real weights
+  // Phones weave the hero on a 3px grid instead of 6px. A phone is only about 50 six-pixel cells wide, too few to
+  // tell 112 connections apart; at 3px it gets the same picture as a wide screen, in miniature. 3 divides 6, so the
+  // hero's cloth still sits on the page's grid.
+  const PHONE = matchMedia('(max-width: 859px)');
+  const heroCell = () => (PHONE.matches ? 3 : 6);
 
   function heroPicture(x, w, h) {
-    const narrow = window.innerWidth < 860, cell = 6;
+    const narrow = PHONE.matches, cell = heroCell();
     drawSilk(x, w, h, narrow ? 0.45 : 0.6);
     // keep the cloth quiet behind the name and caption
     x.globalCompositeOperation = 'destination-out';
@@ -30,11 +35,11 @@
     // the output labels need room for their longest live reading, "steering straight"
     const LABEL = 186;
     if (narrow) {
-      // phones: the same left-to-right network, given all the room there is. It is taller than before, its labels
-      // stack on two lines so they take less width from it, and it is woven slim (see drawNetwork).
-      const pad = parseFloat(getComputedStyle(weave.parentElement).paddingLeft) || 20, LABEL_NARROW = 92;
-      const bh = Math.round(Math.min(window.innerHeight * 0.5, w * 1.12, 460));
-      heroBox = { x: pad - 8, y: 92, w: (w - pad - LABEL_NARROW - (pad - 8)) / 0.92, h: bh, slim: true };
+      // phones: the same left-to-right network, as tall as the first screen allows while still leaving room for the
+      // name and the line under it at the bottom. Its labels stack on two lines so they take less width from it.
+      const pad = parseFloat(getComputedStyle(weave.parentElement).paddingLeft) || 20, LABEL_NARROW = 92, NAME = 150;
+      const bh = Math.round(Math.max(280, Math.min(window.innerHeight - 92 - 16 - NAME, w * 1.6, 640)));
+      heroBox = { x: pad - 8, y: 92, w: (w - pad - LABEL_NARROW - (pad - 8)) / 0.92, h: bh };
     } else {
       // the network is the first thing you see: as large as the screen allows above the name,
       // centred on what you see (three columns of neurons plus their labels)
@@ -52,11 +57,12 @@
 
   function placeLabels() {
     if (!heroBox) return;
-    const outs = networkLayout(heroBox)[2], stack = !!heroBox.slim;   // phones: each label reads on two lines
+    const outs = networkLayout(heroBox)[2], stack = PHONE.matches;   // phones: each label reads on two lines
     const mid = outs[1].y, step = Math.max(outs[1].y - outs[0].y, stack ? 34 : 22);   // room between labels
     labels.classList.toggle('stacked', stack);
-    labels.innerHTML = outs.map((p, k) => `<span class="out" style="left:${p.x}px;top:${mid + (k - 1) * step}px">${NET.outputs[k]}</span>`).join('');
-    if (liveNet) { liveNet.o.labels = [...labels.querySelectorAll('.out')]; liveNet.o.stack = stack; liveNet.lastLabel = 0; }
+    const gap = stack ? `;padding-left:${Math.round(nodeRadius(heroBox, heroCell()) + 8)}px` : '';   // clear of the neuron
+    labels.innerHTML = outs.map((p, k) => `<span class="out" style="left:${p.x}px;top:${mid + (k - 1) * step}px${gap}">${NET.outputs[k]}</span>`).join('');
+    if (liveNet) { liveNet.o.labels = [...labels.querySelectorAll('.out')]; liveNet.o.stack = stack; liveNet.o.cell = heroCell(); liveNet.lastLabel = 0; }
   }
 
   /* ---------- the entry: the picture develops out of scattered dots, from the middle of the network outwards ---------- */
@@ -73,7 +79,7 @@
   /* ---------- cloths ---------- */
   function start() {
     if (NET.lap && window.LiveNet) liveNet = new window.LiveNet(stage, NET, {
-      cell: 6, clock: document.querySelector('.lap-clock'),
+      cell: heroCell(), clock: document.querySelector('.lap-clock'),
       isReady: () => hero.row >= hero.rows,   // threads start moving once the entry has finished
     });
     // the name arrives halfway through the entry; the labels once the network is whole
@@ -82,9 +88,11 @@
       if (row >= rows) { stage.classList.add('is-woven'); if (liveNet) liveNet.redraw(); }
     };
     const hero = new window.Loom(weave, Object.assign({
-      cell: 6, interactive: true, eager: true, warp: false, motion: true, draw: heroPicture, onRow: arrived,
+      cell: heroCell(), interactive: true, eager: true, warp: false, motion: true, draw: heroPicture, onRow: arrived,
     }, ENTRY));
     if (!hero.motion) arrived(1, 1);
+    // turning the phone or resizing across the breakpoint re-weaves the hero on the other grid
+    PHONE.addEventListener('change', () => { hero.o.cell = heroCell(); hero.redraw(); });
     const trackBox = (w, h) => ({ x: w * 0.04, y: h * 0.04, w: w * 0.92, h: h * 0.92 });
     new window.Loom(document.getElementById('track'), {
       cell: 6, rowMs: 14, startOnVisible: true, interactive: true, warp: false,

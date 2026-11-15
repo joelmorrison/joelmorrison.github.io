@@ -373,16 +373,15 @@
     })));
   }
 
-  // One neuron's radius, shared by the woven picture and the live layer.
-  function nodeRadius(box, cell) { return Math.max(cell * 1.4, Math.min(box.h / 30, 22)); }
+  // One neuron's radius, shared by the woven picture and the live layer. It follows the height of the box, but is
+  // also held to a fraction of its width, so on a tall narrow box (phones) the neurons stay in proportion to the
+  // short threads between the columns instead of crowding them.
+  function nodeRadius(box, cell) { return Math.max(cell * 1.4, Math.min(box.h / 30, box.w * 0.043, 22)); }
 
   // The real all-rounder: every connection drawn with its trained weight. The strongest fifth
   // weave as bright thread; the rest fall back to halftone, sized by how strong they are.
-  // On a phone (box.slim) the columns sit much closer together, so there is far less cloth per connection: only the
-  // strongest fifth are woven solid, one cell wide, and the rest are drawn fine and faint. That shows every
-  // connection is there without filling the picture in, which is what made it read as a block.
   function drawNetwork(ctx, box, net, cell) {
-    const pts = networkLayout(box), slim = !!box.slim;
+    const pts = networkLayout(box);
     const edges = [];
     net.hidden_weights.forEach((row, h) => row.forEach((wgt, i) => edges.push({ a: pts[0][i], b: pts[1][h], w: Math.abs(wgt) })));
     net.output_weights.forEach((row, o) => row.forEach((wgt, h) => edges.push({ a: pts[1][h], b: pts[2][o], w: Math.abs(wgt) })));
@@ -391,8 +390,8 @@
     ctx.lineCap = 'round';
     edges.sort((p, q) => p.w - q.w).forEach(e => {
       const hot = e.w >= hotAt, s = e.w / max;
-      ctx.lineWidth = cell * (slim ? (hot ? 0.8 : 0.55) : (hot ? 1.15 : 0.9));
-      ctx.strokeStyle = `rgba(0,0,0,${hot ? 1 : slim ? 0.05 + 0.2 * s : 0.08 + 0.36 * s})`;
+      ctx.lineWidth = cell * (hot ? 1.15 : 0.9);
+      ctx.strokeStyle = `rgba(0,0,0,${hot ? 1 : 0.08 + 0.36 * s})`;
       ctx.beginPath(); ctx.moveTo(e.a.x, e.a.y); ctx.lineTo(e.b.x, e.b.y); ctx.stroke();
     });
     const r = nodeRadius(box, cell);
