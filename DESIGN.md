@@ -221,9 +221,22 @@ The CV link and the Menu button: 44px tall, Strong Hairline border, square corne
 ### Navigation: the staggered menu
 Fixed header with the JM. monogram in Cinzel 600 on the left and two header controls on the right: CV and Menu (two hairlines that cross into an X). At every width the Menu opens the staggered menu: a Regent Violet layer, then a Court Lilac layer, then the Vellum Lilac panel sweep in from the right (`min(560px, 100%)`, 70ms apart), and the six chapter names rise one by one out of a clip in Cinzel at up to 3.9rem, 60ms apart, each with its chapter number in Azeret Mono. Closing runs the layers back in reverse. On the panel, type and controls are Imperial Night; the current chapter carries a short Imperial Night weft float before its number; hovered names step 8px right. The panel foot holds the internship status and Email, GitHub, LinkedIn and CV. While open, the page is `inert` and locked (padded by the scrollbar width so nothing shifts), focus moves to the first chapter, Escape or the scrim closes it and returns focus to Menu.
 
-The header sits above the menu so its buttons stay usable, so its solid banner clears the instant the menu opens and stays clear until the panel has slid away again; it never fades across the slide. To keep the slide smooth, the layers are promoted just before they move (on hover, focus or touch of Menu), and the scroll lock and `inert` are applied two frames after it starts.
+The header's controls sit above the menu so they stay usable, but its solid banner is a separate layer underneath the menu: the panel slides over the banner and back off it, so the banner never hides or reappears. To keep the slide smooth, the layers are promoted just before they move (on hover, focus or touch of Menu), and the scroll lock and `inert` are applied two frames after it starts.
 
-**Menu previews.** On fine pointers at 1040px and wider, pointing at (or tabbing to) a chapter shows a Raised Night card beside the panel, level with the item and gliding between items: one of the chapter's constellations woven on a small loom (4px cells, weaving in from the top each time it changes), then the chapter label, its headline read live from the page, a one-line note and the constellation's name in Azeret Mono. It is the same idea as the Work index preview. Touch and narrow screens get none.
+Pointing at a chapter name steps it 10px right at once (the clip moves, not the name inside it, so nothing is cut off and the step does not wait on the entrance's delay) and fades the other five to 40%.
+
+**Menu previews.** On a mouse, where there is room beside the panel (1010px and wider), pointing at a chapter brings up a 360 × 232px Raised Night card in the space to its left, with a Hairline-strong border, square corners and a deep soft shadow. It fades in over 0.25s and grows from 90% over 0.45s beside the link, then follows the pointer on a spring (it catches up and settles, never snaps), drifts a little sideways with it and leans up to 5° the way it is moving. Moving to another chapter keeps the card and crossfades its face over 0.3s. Six faces, one per chapter, each with a spaced Azeret Mono tag in Court Lilac:
+
+| Face | Shows |
+| --- | --- |
+| 01 About | "Joel Morrison." in Cinzel, Year 2 · DCU · Class of 2029, Dublin's coordinates, and a woven target |
+| 02 Selected work | The technical track woven on a small loom, "Crash Course.", v2.1 released |
+| 03 Skills | The eight skills as study chips, Python and JavaScript in Court Lilac, "The toolkit." |
+| 04 Education | A certificate framed by two hairlines: BSc Computer Science, 2025 — 2029 · Year 2, three modules |
+| 05 Experience | A timeline of Concern Worldwide, Croke Park and HelloFresh with roles and dates |
+| 06 Contact | "Say hello." with a woven envelope, the email address, Open to work |
+
+The three woven pictures are built the first time their face is shown, not with the page. The card hides when the pointer leaves the list, a link is clicked, the menu closes or the window gets too narrow. A keyboard focus shows it still, beside the link; reduced motion gets no spring, lean, scaling or fades; touch never sees it; screen readers skip it.
 
 ### Scroll reveal
 Anything that starts below the fold rises 22px and fades in over 760ms on the house ease as it enters, headlines line by line and lists item by item, 70ms apart (capped at eight steps). Anything already on screen at load never moves. The pre-state is set by the script, so without it everything is simply visible; reduced motion skips it.
@@ -271,7 +284,7 @@ After the entry finishes, the hero network replays one real lap of the all-round
 - **Output labels** read the live decision in Azeret Mono: `steering ← 0.42` (← is the car's left), `accelerator on`, `brake off`. The caption carries a lap clock (`12.4 s of 29.3 s`).
 - **Hover** (fine pointers): within 22px of a neuron, the rest of the cloth eases down to 38% over about a tenth of a second, a ring of 20 pearl dots settles around the neuron, and its connections draw outwards from it as threads of floats over 460ms before carrying their comets; leaving reverses it just as gently. A Raised Night tip fades and rises 6px into place and names it (for example "Ray 30° left · 62% of its range clear", "Hidden neuron 3 of 8 · −0.49", "Steering · left 0.42"). Pressing and holding still raises the linen tester, and the live layer steps aside for it.
 - It pauses off-screen and in hidden tabs. Reduced motion draws one still frame from mid-hairpin.
-- **Phones** (below 860px): the network stands upright and uses the full width: the 11 inputs along the top, the 8 hidden neurons across the middle and the 3 outputs along the bottom, each row spread evenly. Only the strongest fifth of connections weave solid, one cell wide; the rest are fine and faint. Each output's reading hangs under its neuron on two lines (`steering` / `→ 0.52`).
+- **Phones** (below 860px): the same left-to-right network, up to half the screen tall. Only the strongest fifth of connections weave solid, one cell wide; the rest are fine and faint, so the three columns and the threads between them stay readable. Each output's reading stacks on two lines (`steering` / `→ 0.52`) so the labels take less width from the network.
 
 ### Results table
 Hairline-ruled, left-aligned, tabular numerals. Headers in Azeret Mono; the key figures in Cinzel at 1.75rem in Crown Pearl with the share of laps beneath in Azeret Mono. The winning row's figure is Court Lilac and its name carries a text label ("Best transfer"), never colour alone.

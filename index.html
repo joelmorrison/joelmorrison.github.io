@@ -39,6 +39,8 @@ html:not(.ready) *, html:not(.ready) *::before, html:not(.ready) *::after { tran
   <symbol id="i-more" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
 </svg>
 
+<!-- the header's solid banner: its own layer, underneath the menu, so the menu slides over it -->
+<div class="site-bar" aria-hidden="true"></div>
 <header class="site" id="top">
   <a class="mark" href="#top" aria-label="Joel Morrison, back to top">JM.</a>
   <a class="cv" href="Joel-Morrison-CV.pdf">CV<svg class="icon"><use href="#i-down"/></svg></a>
@@ -49,24 +51,63 @@ html:not(.ready) *, html:not(.ready) *::before, html:not(.ready) *::after { tran
 <div class="sm" data-open="false">
   <div class="sm-scrim" aria-hidden="true"></div>
   <div class="sm-layers" aria-hidden="true"><span></span><span></span></div>
-  <!-- preview card: pointing at a chapter in the menu shows its headline and one of its constellations (main.js) -->
+  <!-- preview card: pointing at a chapter in the menu brings up its card left of the panel, following the pointer
+       on a spring (main.js). Six faces, one per chapter; the three pictures are woven on small looms. -->
   <div class="sm-preview" aria-hidden="true">
     <div class="sm-card">
-      <canvas></canvas>
-      <p class="sm-card-k"></p>
-      <p class="sm-card-h"></p>
-      <p class="sm-card-n"></p>
-      <p class="sm-card-sky"></p>
+      <div class="sm-face" data-for="#about">
+        <canvas data-pic="rings"></canvas>
+        <p class="sm-tag">01 / About</p>
+        <p class="sm-big">Joel<br>Morrison<i>.</i></p>
+        <p class="sm-note">Year 2 · DCU · Class of 2029</p>
+        <p class="sm-note-r">53.35° N / 6.26° W</p>
+      </div>
+      <div class="sm-face" data-for="#work">
+        <canvas data-pic="track"></canvas>
+        <p class="sm-tag">02 / Selected work</p>
+        <p class="sm-tag-r">v2.1 released</p>
+        <p class="sm-title">Crash Course.</p>
+        <p class="sm-note-r">laps all four</p>
+      </div>
+      <div class="sm-face" data-for="#receipts">
+        <p class="sm-tag">03 / Skills</p>
+        <p class="sm-tag-r">With receipts</p>
+        <ul class="sm-chips"><li class="hot">Python</li><li class="hot">JavaScript</li><li>HTML &amp; CSS</li><li>C</li><li>Git</li><li>React</li><li>Testing</li><li>Experiments</li></ul>
+        <p class="sm-title">The toolkit.</p>
+        <p class="sm-note-r">each one linked</p>
+      </div>
+      <div class="sm-face" data-for="#education">
+        <p class="sm-tag">04 / Dublin City University</p>
+        <p class="sm-big">BSc <i>Computer</i><br>Science</p>
+        <p class="sm-when">2025 — 2029 · Year 2</p>
+        <p class="sm-note">Systems Programming in C · Networks · Web Design</p>
+      </div>
+      <div class="sm-face" data-for="#experience">
+        <p class="sm-tag">05 / Experience</p>
+        <p class="sm-tag-r">People first</p>
+        <ul class="sm-line">
+          <li>Concern Worldwide<small>On-street fundraiser · 2026 –</small></li>
+          <li>Croke Park<small>Matchday &amp; event steward · 2026 –</small></li>
+          <li>HelloFresh<small>Cashier operative · 2025 – 26</small></li>
+        </ul>
+      </div>
+      <div class="sm-face" data-for="#contact">
+        <canvas data-pic="envelope"></canvas>
+        <p class="sm-tag">06 / Contact</p>
+        <p class="sm-tag-r">Open to work</p>
+        <p class="sm-big">Say<br><i>hello.</i></p>
+        <p class="sm-note">joelmorrison121@gmail.com</p>
+      </div>
     </div>
   </div>
   <nav class="sm-panel" id="nav" aria-label="Sections">
     <ol class="sm-list">
-      <li><a href="#about" data-sky="orion" data-note="Second-year Computer Science at DCU, with a focus on Python, web development and AI."><span class="sm-n">01</span><span class="sm-clip"><span class="sm-l">About</span></span></a></li>
-      <li><a href="#work" data-sky="auriga" data-note="Crash Course, a released machine-learning project, and three hackathon builds."><span class="sm-n">02</span><span class="sm-clip"><span class="sm-l">Work</span></span></a></li>
-      <li><a href="#receipts" data-sky="lyra" data-note="Eight skills, each linked to the work that shows it."><span class="sm-n">03</span><span class="sm-clip"><span class="sm-l">Skills</span></span></a></li>
-      <li><a href="#education" data-sky="perseus" data-note="BSc Computer Science at Dublin City University, expected 2029."><span class="sm-n">04</span><span class="sm-clip"><span class="sm-l">Education</span></span></a></li>
-      <li><a href="#experience" data-sky="plough" data-note="People-facing roles at Concern Worldwide, Croke Park and HelloFresh."><span class="sm-n">05</span><span class="sm-clip"><span class="sm-l">Experience</span></span></a></li>
-      <li><a href="#contact" data-sky="ursaMinor" data-note="Open to summer 2027 internships. Email, GitHub, LinkedIn and CV."><span class="sm-n">06</span><span class="sm-clip"><span class="sm-l">Contact</span></span></a></li>
+      <li><a href="#about"><span class="sm-n">01</span><span class="sm-clip"><span class="sm-l">About</span></span></a></li>
+      <li><a href="#work"><span class="sm-n">02</span><span class="sm-clip"><span class="sm-l">Work</span></span></a></li>
+      <li><a href="#receipts"><span class="sm-n">03</span><span class="sm-clip"><span class="sm-l">Skills</span></span></a></li>
+      <li><a href="#education"><span class="sm-n">04</span><span class="sm-clip"><span class="sm-l">Education</span></span></a></li>
+      <li><a href="#experience"><span class="sm-n">05</span><span class="sm-clip"><span class="sm-l">Experience</span></span></a></li>
+      <li><a href="#contact"><span class="sm-n">06</span><span class="sm-clip"><span class="sm-l">Contact</span></span></a></li>
     </ol>
     <div class="sm-foot">
       <p class="sm-status">Open to summer 2027 internships</p>

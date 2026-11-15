@@ -484,8 +484,5 @@
     }
   }
 
-  // a constellation as a flat picture in a unit box, for anything else that wants to draw one (the menu's preview cards)
-  Field.figure = con => { const p = project(con, 0); return { stars: p.stars.map(s => ({ x: s.x, y: s.y, b: (s.peak - 0.4) / 0.6 })), lines: p.lines }; };
-
   window.Field = Field;
 })();

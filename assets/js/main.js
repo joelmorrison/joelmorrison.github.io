@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  const { networkLayout, nodeRadius, drawNetwork, drawTrack, drawSilk, drawFigure } = window.LoomPictures;
+  const { networkLayout, drawNetwork, drawTrack, drawSilk, drawRings, drawEnvelope } = window.LoomPictures;
   const NET = window.ALL_ROUNDER;
   const root = document.documentElement;
   const cssVar = n => getComputedStyle(root).getPropertyValue(n).trim();
@@ -30,11 +30,11 @@
     // the output labels need room for their longest live reading, "steering straight"
     const LABEL = 186;
     if (narrow) {
-      // phones: the network stands upright, inputs along the top and the three outputs along the bottom, using the
-      // full width, so each layer has room and the connections between them can be seen. Labels sit under the outputs.
-      const pad = (parseFloat(getComputedStyle(weave.parentElement).paddingLeft) || 20) + 8;
-      const bh = Math.round(Math.min(window.innerHeight * 0.4, w * 0.92, 360));
-      heroBox = { x: pad, y: 100, w: w - pad * 2, h: bh, upright: true };
+      // phones: the same left-to-right network, given all the room there is. It is taller than before, its labels
+      // stack on two lines so they take less width from it, and it is woven slim (see drawNetwork).
+      const pad = parseFloat(getComputedStyle(weave.parentElement).paddingLeft) || 20, LABEL_NARROW = 92;
+      const bh = Math.round(Math.min(window.innerHeight * 0.5, w * 1.12, 460));
+      heroBox = { x: pad - 8, y: 92, w: (w - pad - LABEL_NARROW - (pad - 8)) / 0.92, h: bh, slim: true };
     } else {
       // the network is the first thing you see: as large as the screen allows above the name,
       // centred on what you see (three columns of neurons plus their labels)
@@ -47,17 +47,16 @@
     placeLabels();
     if (liveNet) liveNet.layout(heroBox, networkLayout(heroBox));
     // on phones the copy starts below the network and its labels
-    weave.parentElement.style.setProperty('--net-bottom', Math.round(heroBox.y + heroBox.h + (heroBox.upright ? 62 : 16)) + 'px');
+    weave.parentElement.style.setProperty('--net-bottom', Math.round(heroBox.y + heroBox.h + 16) + 'px');
   }
 
   function placeLabels() {
     if (!heroBox) return;
-    const outs = networkLayout(heroBox)[2], up = !!heroBox.upright;
-    const mid = outs[1].y, step = Math.max(outs[1].y - outs[0].y, 22);   // at least 22px between labels
-    const below = nodeRadius(heroBox, 6) + 10;                           // upright: each label hangs under its own output
-    labels.classList.toggle('upright', up);
-    labels.innerHTML = outs.map((p, k) => `<span class="out" style="left:${p.x}px;top:${up ? p.y + below : mid + (k - 1) * step}px">${NET.outputs[k]}</span>`).join('');
-    if (liveNet) { liveNet.o.labels = [...labels.querySelectorAll('.out')]; liveNet.o.stack = up; liveNet.lastLabel = 0; }
+    const outs = networkLayout(heroBox)[2], stack = !!heroBox.slim;   // phones: each label reads on two lines
+    const mid = outs[1].y, step = Math.max(outs[1].y - outs[0].y, stack ? 34 : 22);   // room between labels
+    labels.classList.toggle('stacked', stack);
+    labels.innerHTML = outs.map((p, k) => `<span class="out" style="left:${p.x}px;top:${mid + (k - 1) * step}px">${NET.outputs[k]}</span>`).join('');
+    if (liveNet) { liveNet.o.labels = [...labels.querySelectorAll('.out')]; liveNet.o.stack = stack; liveNet.lastLabel = 0; }
   }
 
   /* ---------- the entry: the picture develops out of scattered dots, from the middle of the network outwards ---------- */
@@ -147,7 +146,8 @@
 
   /* ---------- header: clear over the hero, solid once the name has gone ---------- */
   const header = document.querySelector('.site');
-  new IntersectionObserver(([e]) => header.classList.toggle('scrolled', !e.isIntersecting), { rootMargin: '-80px 0px 0px 0px' })
+  const siteBar = document.querySelector('.site-bar');   // the banner is its own layer, beneath the menu
+  new IntersectionObserver(([e]) => { header.classList.toggle('scrolled', !e.isIntersecting); if (siteBar) siteBar.classList.toggle('on', !e.isIntersecting); }, { rootMargin: '-80px 0px 0px 0px' })
     .observe(document.getElementById('name'));
 
   /* ---------- staggered menu ---------- */
@@ -171,7 +171,7 @@
     // 1. only what starts the slide happens now, so the first frame is not held up
     sm.dataset.open = String(open);
     root.classList.toggle('menu-open', open);
-    // while the panel slides away the header stays clear and its buttons stay dark: the banner must not cover the panel
+    // while the panel slides away the header's buttons change colour a beat late, once it has left them
     clearTimeout(closing); root.classList.toggle('menu-closing', !open);
     if (!open) closing = setTimeout(() => root.classList.remove('menu-closing'), 460);
     menuBtn.setAttribute('aria-expanded', String(open));
@@ -192,46 +192,76 @@
   nav.addEventListener('click', e => { if (e.target.closest('a')) setMenu(false); });
   addEventListener('keydown', e => { if (e.key === 'Escape' && isOpen()) { setMenu(false); menuBtn.focus(); } });
 
-  /* ---------- menu previews: pointing at a chapter shows a card for it beside the menu ----------
-     The card carries the chapter's own label and headline, read from the page so they cannot go stale, a one-line
-     note, and one of the chapter's constellations woven on a small loom, the way Crash Course's row weaves its track.
-     Mouse and keyboard only, and only where there is room beside the panel. */
+  /* ---------- menu previews: pointing at a chapter brings up its card in the space left of the panel ----------
+     The card follows the pointer on a spring, settling rather than snapping, and leans up to 5 degrees the way it is
+     moving. Moving to another chapter keeps the card and crossfades its face. Its three pictures are woven on small
+     looms the first time they are shown, so nothing is built with the page. Mouse only, and only where the card fits
+     beside the panel; a keyboard focus shows the card still, beside the link; reduced motion gets no spring or lean. */
   const card = document.querySelector('.sm-preview');
-  const roomy = matchMedia('(min-width: 1040px)');
-  let skyLoom = null, shown = null;
-  function peek(a) {
+  const roomy = matchMedia('(min-width: 1010px)');
+  const faces = card ? [...card.querySelectorAll('.sm-face')] : [];
+  const W = 360, H = 232, GAP = 28;
+  const pictures = {
+    rings: (x, w, h) => drawRings(x, { x: 8, y: 8, w: w - 16, h: h - 16 }, 4),
+    track: (x, w, h) => drawTrack(x, { x: w * 0.03, y: h * 0.04, w: w * 0.94, h: h * 0.92 }, NET.technical_track, 4),
+    envelope: (x, w, h) => drawEnvelope(x, { x: 4, y: 4, w: w - 8, h: h - 8 }, 4),
+  };
+  const looms = new Map();
+  const spring = { x: 0, y: 0, vx: 0, vy: 0, tx: 0, ty: 0, rot: 0, raf: 0, last: 0 };
+  let shown = null;
+  const place = () => { card.style.transform = `translate3d(${spring.x.toFixed(1)}px, ${spring.y.toFixed(1)}px, 0) rotate(${spring.rot.toFixed(2)}deg)`; };
+  const settle = now => {
+    const s = spring, dt = Math.min(0.032, (now - (s.last || now)) / 1000 || 0.016); s.last = now;
+    // a spring a little under critical damping: it catches up, overshoots slightly and settles
+    s.vx += (170 * (s.tx - s.x) - 21 * s.vx) * dt; s.vy += (170 * (s.ty - s.y) - 21 * s.vy) * dt;
+    s.x += s.vx * dt; s.y += s.vy * dt;
+    const lean = Math.max(-5, Math.min(5, s.vy * 0.012 + s.vx * 0.02));
+    s.rot += (lean - s.rot) * Math.min(1, dt * 10);
+    const still = Math.abs(s.tx - s.x) + Math.abs(s.ty - s.y) < 0.3 && Math.abs(s.vx) + Math.abs(s.vy) < 4 && Math.abs(s.rot) < 0.05;
+    if (still) { s.x = s.tx; s.y = s.ty; s.rot = 0; s.vx = s.vy = 0; s.raf = 0; s.last = 0; } else s.raf = requestAnimationFrame(settle);
+    place();
+  };
+  // where the card should be for a pointer (or, with no pointer, level with the link itself)
+  const aimCard = (a, e) => {
+    const panelLeft = sm.clientWidth - nav.offsetWidth, r = a.getBoundingClientRect();
+    const cy = e ? e.clientY : r.top + r.height / 2;
+    const drift = e ? Math.max(-16, Math.min(16, (e.clientX - (panelLeft + nav.offsetWidth * 0.4)) * 0.06)) : 0;
+    spring.tx = Math.max(12, panelLeft - GAP - W + drift);
+    spring.ty = Math.max(96, Math.min(innerHeight - H - 24, cy - H / 2));
+  };
+  function peek(a, e, keyboard) {
     if (!card) return;
     if (!a || !FINE || !roomy.matches) { card.classList.remove('on'); shown = null; return; }
     const first = !card.classList.contains('on');
     if (a !== shown) {
       shown = a;
-      const sec = document.querySelector(a.getAttribute('href')), con = (window.CONSTELLATIONS || {})[a.dataset.sky];
-      const label = sec && sec.querySelector('.chapter'), head = sec && sec.querySelector('h2');
-      card.querySelector('.sm-card-k').textContent = label ? label.textContent : '';
-      card.querySelector('.sm-card-h').textContent = head ? [...head.querySelectorAll('.line')].map(l => l.textContent.trim()).join(' ') || head.textContent.trim() : '';
-      card.querySelector('.sm-card-n').textContent = a.dataset.note || '';
-      card.querySelector('.sm-card-sky').textContent = con ? 'Sky · ' + con.name : '';
-      if (con && window.Field && window.Field.figure) {
-        const fig = window.Field.figure(con);
-        const draw = (x, w, h) => drawFigure(x, { x: w * 0.14, y: h * 0.14, w: w * 0.72, h: h * 0.72 }, fig, 4);
-        if (!skyLoom) skyLoom = new window.Loom(card.querySelector('canvas'), { cell: 4, rowMs: 6, eager: true, particles: false, warp: false, draw });
-        else { skyLoom.o.draw = draw; if (skyLoom.w) skyLoom.build(false); }   // weave the new figure in from the top
-      }
+      faces.forEach(f => {
+        const on = f.dataset.for === a.getAttribute('href');
+        f.classList.toggle('on', on);
+        const cv = on && f.querySelector('canvas[data-pic]');
+        if (!cv) return;
+        const loom = looms.get(cv);   // woven the first time its face is shown, and again from the top each time it returns
+        if (!loom) looms.set(cv, new window.Loom(cv, { cell: 4, rowMs: 5, eager: true, particles: false, warp: false, draw: pictures[cv.dataset.pic] }));
+        else if (loom.w) loom.build(false);
+      });
     }
-    // level with the item, kept on screen; it glides between items and snaps into place the first time
-    const r = a.getBoundingClientRect(), hgt = card.offsetHeight;
-    const y = Math.round(Math.max(96, Math.min(innerHeight - hgt - 24, r.top + r.height / 2 - hgt / 2)));
-    if (first || REDUCED) { card.style.transition = 'none'; card.style.setProperty('--y', y + 'px'); void card.offsetWidth; card.style.transition = ''; }
-    else card.style.setProperty('--y', y + 'px');
+    aimCard(a, e);
+    if (first || keyboard || REDUCED) {   // appears right beside the link; a keyboard focus and reduced motion never spring
+      cancelAnimationFrame(spring.raf);
+      Object.assign(spring, { x: spring.tx, y: spring.ty, vx: 0, vy: 0, rot: 0, raf: 0, last: 0 });
+      place();
+    } else if (!spring.raf) spring.raf = requestAnimationFrame(settle);
     card.classList.add('on');
   }
   const smList = nav.querySelector('.sm-list');
   smList.querySelectorAll('a').forEach(a => {
-    a.addEventListener('pointerenter', () => { if (isOpen()) peek(a); });
-    a.addEventListener('focus', () => { if (isOpen() && a.matches(':focus-visible')) peek(a); });
+    a.addEventListener('pointerenter', e => { if (isOpen() && e.pointerType === 'mouse') peek(a, e); });
+    a.addEventListener('pointermove', e => { if (isOpen() && e.pointerType === 'mouse') peek(a, e); });
+    a.addEventListener('focus', () => { if (isOpen() && a.matches(':focus-visible')) peek(a, null, true); });
   });
   smList.addEventListener('pointerleave', () => peek(null));
   smList.addEventListener('focusout', e => { if (!smList.contains(e.relatedTarget)) peek(null); });
+  addEventListener('resize', () => { if (!roomy.matches) peek(null); });
 
   // the menu marks the chapter you're reading
   const navLinks = [...nav.querySelectorAll('.sm-list a')];

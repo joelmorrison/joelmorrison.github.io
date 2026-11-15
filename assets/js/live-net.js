@@ -15,8 +15,8 @@
     constructor(stage, net, opts) {
       this.stage = stage;
       this.net = net;
-      // stack: each output label reads as two lines, name then value (the upright network on phones, where the
-      // labels hang under the outputs and have to be narrow)
+      // stack: each output label reads as two lines, name then value (phones, where the labels have to be narrow
+      // so the network can have the width)
       this.o = Object.assign({ cell: 6, layout: null, labels: null, clock: null, stack: false, isReady: () => true }, opts);
       this.c = document.createElement('canvas');
       this.c.className = 'live';

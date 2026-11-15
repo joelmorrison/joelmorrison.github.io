@@ -364,17 +364,9 @@
 
   /* ---------- pictures ---------- */
 
-  // Node positions for an 11 → 8 → 3 network inside a box.
-  // Wide screens: three columns, signal running left to right.
-  // box.upright (phones): three rows, signal running top to bottom, each row spread across the full width,
-  // so the layers have room between them and the picture still reads as a network on a narrow screen.
+  // Node positions for an 11 → 8 → 3 network inside a box: three columns, signal running left to right.
   function networkLayout(box) {
-    const sizes = [11, 8, 3];
-    if (box.upright) return sizes.map((n, l) => {
-      const gap = Math.min(box.w / n, 150);
-      return Array.from({ length: n }, (_, k) => ({ x: box.x + box.w / 2 + (k - (n - 1) / 2) * gap, y: box.y + box.h * (0.07 + l * 0.43) }));
-    });
-    const gap = Math.min(box.h / 11.5, 64);
+    const sizes = [11, 8, 3], gap = Math.min(box.h / 11.5, 64);
     return sizes.map((n, l) => Array.from({ length: n }, (_, k) => ({
       x: box.x + box.w * (0.08 + l * 0.42),
       y: box.y + box.h / 2 + (k - (n - 1) / 2) * gap,
@@ -382,15 +374,15 @@
   }
 
   // One neuron's radius, shared by the woven picture and the live layer.
-  function nodeRadius(box, cell) { return Math.max(cell * 1.4, Math.min(box.upright ? box.w / 36 : box.h / 30, 22)); }
+  function nodeRadius(box, cell) { return Math.max(cell * 1.4, Math.min(box.h / 30, 22)); }
 
   // The real all-rounder: every connection drawn with its trained weight. The strongest fifth
   // weave as bright thread; the rest fall back to halftone, sized by how strong they are.
-  // On a phone (box.upright) there is far less cloth per connection, so only the strongest fifth are woven solid,
-  // one cell wide, and the rest are drawn fine and faint: enough to show every connection is there, not enough
-  // to fill the picture in.
+  // On a phone (box.slim) the columns sit much closer together, so there is far less cloth per connection: only the
+  // strongest fifth are woven solid, one cell wide, and the rest are drawn fine and faint. That shows every
+  // connection is there without filling the picture in, which is what made it read as a block.
   function drawNetwork(ctx, box, net, cell) {
-    const pts = networkLayout(box), slim = !!box.upright;
+    const pts = networkLayout(box), slim = !!box.slim;
     const edges = [];
     net.hidden_weights.forEach((row, h) => row.forEach((wgt, i) => edges.push({ a: pts[0][i], b: pts[1][h], w: Math.abs(wgt) })));
     net.output_weights.forEach((row, o) => row.forEach((wgt, h) => edges.push({ a: pts[1][h], b: pts[2][o], w: Math.abs(wgt) })));
@@ -409,14 +401,24 @@
     return pts;
   }
 
-  // A constellation (from Field.figure) for a small woven card: lines in halftone, stars woven solid, sized by brightness.
-  function drawFigure(ctx, box, fig, cell) {
-    const s = Math.min(box.w, box.h), cx = box.x + box.w / 2, cy = box.y + box.h / 2;
-    const at = p => [cx + p.x * s, cy + p.y * s];
-    ctx.lineCap = 'round'; ctx.lineWidth = cell * 0.9; ctx.strokeStyle = 'rgba(0,0,0,.26)';
-    fig.lines.forEach(([f, t]) => { const a = at(fig.stars[f]), b = at(fig.stars[t]); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); });
-    ctx.fillStyle = '#000';
-    fig.stars.forEach(p => { const a = at(p); ctx.beginPath(); ctx.arc(a[0], a[1], cell * (0.75 + 1.5 * p.b), 0, 7); ctx.fill(); });
+  // Two small pictures for the menu's preview cards, drawn for the loom to weave.
+  // A target: two rings and a cross-hair, for "where I am".
+  function drawRings(ctx, box, cell) {
+    const cx = box.x + box.w / 2, cy = box.y + box.h / 2, R = Math.min(box.w, box.h) / 2;
+    ctx.strokeStyle = 'rgba(0,0,0,.34)'; ctx.lineWidth = cell * 0.9;
+    for (const r of [R, R * 0.56]) { ctx.beginPath(); ctx.arc(cx, cy, r - cell, 0, 7); ctx.stroke(); }
+    ctx.strokeStyle = 'rgba(0,0,0,.2)'; ctx.lineWidth = cell * 0.7;
+    ctx.beginPath(); ctx.moveTo(cx - R, cy); ctx.lineTo(cx + R, cy); ctx.moveTo(cx, cy - R); ctx.lineTo(cx, cy + R); ctx.stroke();
+    ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(cx, cy, cell * 1.5, 0, 7); ctx.fill();
+  }
+  // An envelope: the outline woven solid, the folds in halftone.
+  function drawEnvelope(ctx, box, cell) {
+    const { x, y, w, h } = box;
+    ctx.lineJoin = 'miter'; ctx.lineWidth = cell * 1.1; ctx.strokeStyle = '#000';
+    ctx.strokeRect(x + cell, y + cell, w - cell * 2, h - cell * 2);
+    ctx.strokeStyle = 'rgba(0,0,0,.36)'; ctx.lineWidth = cell * 0.9;
+    ctx.beginPath(); ctx.moveTo(x + cell, y + cell); ctx.lineTo(x + w / 2, y + h * 0.56); ctx.lineTo(x + w - cell, y + cell);
+    ctx.moveTo(x + cell, y + h - cell); ctx.lineTo(x + w * 0.36, y + h * 0.46); ctx.moveTo(x + w - cell, y + h - cell); ctx.lineTo(x + w * 0.64, y + h * 0.46); ctx.stroke();
   }
 
   // Closed Catmull-Rom curve through the control points, the same construction Crash Course uses.
@@ -462,5 +464,5 @@
 
   Loom.canLook = () => FINE.matches && !REDUCED.matches;
   window.Loom = Loom;
-  window.LoomPictures = { networkLayout, nodeRadius, drawNetwork, drawTrack, drawSilk, drawFigure };
+  window.LoomPictures = { networkLayout, nodeRadius, drawNetwork, drawTrack, drawSilk, drawRings, drawEnvelope };
 })();
