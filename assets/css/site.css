@@ -514,3 +514,18 @@ main .btn:not(.ghost), main .card { text-shadow: none; }
   .hero-foot { margin-top: 0; }
   .hero-note { order: 0; }
 }
+
+/* =====================================================================
+   ITERATION 4 · the cursor and the hero's shading
+   ===================================================================== */
+
+/* the hero's live shading (hero-shade.js) and the lantern (cursor.js) sit under the network */
+.stage .shade, .stage .lantern { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
+.stage .shade { transition: opacity 1.2s var(--ease-out); }
+.js .stage:not(.is-named) .shade { opacity: 0; }   /* it comes up with the name, halfway through the entry */
+
+/* the cursor's woven star, above everything but the skip link, and its glow, behind the content past the hero */
+.cursor-star { position: fixed; left: 0; top: 0; width: 72px; height: 72px; z-index: 80; pointer-events: none; opacity: 0; will-change: transform; }
+.cursor-glow { position: fixed; left: 0; top: 0; width: 360px; height: 360px; z-index: -1; pointer-events: none; opacity: 0; will-change: transform, opacity;
+  background: radial-gradient(circle, rgba(203, 184, 255, .2) 0, rgba(155, 123, 255, .08) 32%, rgba(155, 123, 255, 0) 68%); }
+@media (hover: none), (pointer: coarse) { .cursor-star, .cursor-glow { display: none; } }

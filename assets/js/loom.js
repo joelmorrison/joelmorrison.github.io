@@ -452,9 +452,11 @@
   }
 
   // Broad soft light falling across silk; rendered by the loom only as halftone dots.
+  // the hero's shading: five soft patches [x, y, radius, strength], as fractions of the cloth. hero-shade.js draws the
+  // same patches live; this still version is woven into the cloth wherever that can't run.
+  const SILK = [[0.78, 0.28, 0.55, 0.32], [0.98, 0.92, 0.45, 0.26], [0.3, 1.08, 0.5, 0.2], [0.55, 0.02, 0.35, 0.16], [0.12, 0.42, 0.3, 0.1]];
   function drawSilk(ctx, w, h, strength) {
-    const spots = [[0.78, 0.28, 0.55, 0.32], [0.98, 0.92, 0.45, 0.26], [0.3, 1.08, 0.5, 0.2], [0.55, 0.02, 0.35, 0.16], [0.12, 0.42, 0.3, 0.1]];
-    for (const [cx, cy, r, a] of spots) {
+    for (const [cx, cy, r, a] of SILK) {
       const g = ctx.createRadialGradient(cx * w, cy * h, 0, cx * w, cy * h, r * Math.max(w, h));
       g.addColorStop(0, `rgba(0,0,0,${a * strength})`); g.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
@@ -463,5 +465,5 @@
 
   Loom.canLook = () => FINE.matches && !REDUCED.matches;
   window.Loom = Loom;
-  window.LoomPictures = { networkLayout, nodeRadius, drawNetwork, drawTrack, drawSilk, drawRings, drawEnvelope };
+  window.LoomPictures = { networkLayout, nodeRadius, drawNetwork, drawTrack, drawSilk, drawRings, drawEnvelope, SILK };
 })();

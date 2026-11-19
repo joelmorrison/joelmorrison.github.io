@@ -88,6 +88,12 @@
       return { x: a.slice(0, 11).map((v, m) => v + (b[m] - v) * k), seconds: (f / this.hz) % (this.n / this.hz) };
     }
 
+    /* what the car is doing at time now, for anything else that follows the lap (the hero's shading) */
+    reading(now) {
+      const { x } = this.inputsAt(now), { o } = this.forward(x);
+      return { speed: x[7], steer: o[0], acc: o[1] > 0 ? 1 : 0, brake: o[2] > 0 ? 1 : 0 };
+    }
+
     forward(x) {
       const { hidden_weights: W1, hidden_biases: b1, output_weights: W2, output_biases: b2 } = this.net;
       const h = W1.map((row, r) => Math.tanh(row.reduce((s, w, i) => s + w * x[i], b1 ? b1[r] : 0)));

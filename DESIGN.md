@@ -149,7 +149,7 @@ A high-contrast imperial palette: one near-black violet ground, one lilac accent
 - **Faint Warp** (`warp-faint`): the warp dot grid under the cloth.
 
 ### Named Rules
-**The Thread Light Rule.** Light on this site comes from thread. Brightness is earned by data (stronger weight, stronger thread), never added as glow, gradient text or blur.
+**The Thread Light Rule.** Light on this site comes from thread. Brightness is earned by data (stronger weight, stronger thread), never added as glow, gradient text or blur. One exception, deliberately: past the hero, the cursor's star carries a soft glow (see The cursor).
 
 **The One Accent Rule.** Court Lilac is the only accent. Regent Violet shades it; nothing introduces a second hue.
 
@@ -273,9 +273,19 @@ One night sky lies behind the whole page, woven into the cloth. The warp dots ar
 
 Stars are woven by the loom's own rule: a core of weft floats above .62 tone, a halo of halftone dots sized by tone, Regent Violet in the shade and Court Lilac in the body. Brightness is magnitude: faint stars stay dots, brighter ones earn floats, and only the cores of the brightest reach Crown Pearl (The Thread Light Rule). Lines between stars are dotted Regent Violet threads. Three quieter layers fill the sky, all real: the fainter catalogue stars around each figure, as single small dots; the Milky Way, as a grainy river of faint Regent Violet dots drawn where the plane of the galaxy really crosses each figure (every chapter has at least one constellation that sits on it); and one shooting star as each new sky arrives. Where the page is thick with text or pictures the sky thins out gradually, over about 70px with no edge to see, and never in boxes; text in `main` also carries a soft halo of Imperial Night (`text-shadow`, 4px and 12px), which clears the dots just around the letters.
 
-Scroll drives it. As a chapter arrives its first constellation lights brightest star first, then its lines draw from star to star, and the other two follow; just before the next chapter they unweave in reverse and the next sky takes their place, with no gap and no overlap. Each constellation turns up to 7 degrees and drifts a little through its chapter, and its faint stars and Milky Way move with it as one piece, so nothing in the sky travels at a speed of its own. Nothing moves while the page is still. Below 860px a chapter keeps two constellations, small, in opposite corners, as dots only. While you scroll fast the lit dots draw out into short weft floats; on fine pointers the lit cloth lifts near the cursor, and the cursor never adds light of its own. Chapters are not divided by hairlines: a short Regent Violet float before each chapter label marks the change instead. Reduced motion gets each sky whole and still, with no shooting star.
+Scroll drives it. As a chapter arrives its first constellation lights brightest star first, then its lines draw from star to star, and the other two follow; just before the next chapter they unweave in reverse and the next sky takes their place, with no gap and no overlap. Each constellation turns up to 7 degrees and drifts a little through its chapter, and its faint stars and Milky Way move with it as one piece, so nothing in the sky travels at a speed of its own. Nothing moves while the page is still. Below 860px a chapter keeps two constellations, small, in opposite corners, as dots only. While you scroll fast the lit dots draw out into short weft floats; on fine pointers the lit cloth lifts near the cursor; the only light the cursor adds is its glow (see The cursor). Chapters are not divided by hairlines: a short Regent Violet float before each chapter label marks the change instead. Reduced motion gets each sky whole and still, with no shooting star.
 
 The field keeps itself cheap. Each constellation only touches the cells it lights, each Milky Way is worked out once in idle time and then looked up, small dots are drawn as squares, and nothing is drawn at all while no sky is lit. It times its own frames: a device that cannot keep up loses the Milky Way first, then the faint stars and some sharpness, and never the constellations.
+
+### The cursor (signature)
+Mouse only, and the system pointer always stays: a companion keeps it company, 14px right of and 18px below its tip.
+- **The woven star.** Four points of Court Lilac dots and dashes with a pearl crossing, on a 3px grid aligned to the page's 6px grid, about 44px across. It follows the pointer on a spring (it catches up, overshoots slightly and settles) and leans up to 20 degrees the way it is moving. Over a link or button it turns Crown Pearl and grows by a third; on the menu's card stock it turns Imperial Night, as the click sparks do. It steps aside while the linen tester is up.
+- **The lantern, in the hero.** Every star to magnitude 6 in the real winter sky around Orion (`assets/data/winter-sky.js`, from the d3-celestial catalogue) lies hidden under the network; the ones within 240px of the pointer come up, woven by the loom's rule on the hero's grid. The stars are fixed to the page, on a canvas that scrolls with the hero, so scrolling slides the sky under the lantern.
+- **The glow, past the hero.** A soft lilac light, 360px across, behind the content and in front of the night sky. It is the one exception to The Thread Light Rule. The lantern and the glow cross over at the bottom of the hero.
+- Reduced motion: no spring or lean. Touch: none of it.
+
+### The hero's shading
+The soft patches of halftone behind the network follow the lap it is replaying: brighter as the car gathers speed, a lift on the accelerator, dimmer under braking, and the light swings up to 9% of the width the way the car is steering, all smoothed so it swells rather than flickers. On a mouse the dots within about 210px of the pointer rise, up to 2.3 times; they are only ever dots already there. It stays dots, never floats. A small WebGL shader sizes every dot, so it costs almost nothing per frame (drawn one by one it would be about 35,000 dots a frame); without WebGL the still shading is woven into the cloth as before. It comes up with the name, pauses off-screen and in hidden tabs, and reduced motion gets one still frame.
 
 ### The live network (signature)
 After the entry finishes, the hero network replays one real lap of the all-rounder on the technical track (`ALL_ROUNDER.lap`: 11 recorded sensor inputs and the 3 outputs, sampled at 15 Hz from the game). Each frame runs the inputs through the real weights and biases (tanh, 11 → 8 → 3), so nothing is invented: brightness is the signal a connection is actually carrying (The Thread Light Rule).
@@ -307,7 +317,7 @@ On the lead project, three ledger rows (Court Lilac sub-head on the left, text o
 
 ### Don't:
 - **Don't** box content in cards, panels or shadowed containers.
-- **Don't** add a second accent hue, gradient text, glows or decorative blur (The Thread Light Rule).
+- **Don't** add a second accent hue, gradient text, glows or decorative blur (The Thread Light Rule). The cursor's glow past the hero is the one agreed exception.
 - **Don't** use rounded corners or pill shapes on buttons, tags or containers.
 - **Don't** set prose in monospace or body text in Cinzel.
 - **Don't** add shadows beyond Lifted action and the Lens.

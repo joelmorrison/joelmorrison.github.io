@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  const { networkLayout, nodeRadius, drawNetwork, drawTrack, drawSilk, drawRings, drawEnvelope } = window.LoomPictures;
+  const { networkLayout, nodeRadius, drawNetwork, drawTrack, drawSilk, drawRings, drawEnvelope, SILK } = window.LoomPictures;
   const NET = window.ALL_ROUNDER;
   const root = document.documentElement;
   const cssVar = n => getComputedStyle(root).getPropertyValue(n).trim();
@@ -17,6 +17,7 @@
   const labels = document.getElementById('labels');
   let heroBox = null;
   let liveNet = null;   // the live layer: replays the all-rounder's real lap through its real weights
+  let shade = null;     // the hero's live shading (hero-shade.js); without it the still shading is woven into the cloth
   // Phones weave the hero on a 3px grid instead of 6px. A phone is only about 50 six-pixel cells wide, too few to
   // tell 112 connections apart; at 3px it gets the same picture as a wide screen, in miniature. 3 divides 6, so the
   // hero's cloth still sits on the page's grid.
@@ -25,7 +26,7 @@
 
   function heroPicture(x, w, h) {
     const narrow = PHONE.matches, cell = heroCell();
-    drawSilk(x, w, h, narrow ? 0.45 : 0.6);
+    if (!shade || !shade.ok) drawSilk(x, w, h, narrow ? 0.45 : 0.6);
     // keep the cloth quiet behind the name and caption
     x.globalCompositeOperation = 'destination-out';
     const g = x.createLinearGradient(0, h, 0, h * (narrow ? 0.3 : 0.6));
@@ -82,6 +83,12 @@
       cell: heroCell(), clock: document.querySelector('.lap-clock'),
       isReady: () => hero.row >= hero.rows,   // threads start moving once the entry has finished
     });
+    // the shading follows the same lap: brighter with speed, dimmer under braking, swinging with the steering
+    if (window.HeroShade) shade = new window.HeroShade(stage, {
+      spots: SILK, cell: heroCell, strength: () => (PHONE.matches ? 0.45 : 0.6), fadeLo: () => (PHONE.matches ? 0.3 : 0.6),
+      lap: now => (liveNet ? liveNet.reading(now) : null),
+      onLost: () => hero.redraw(),   // the graphics card dropped it: weave the still shading back into the cloth
+    });
     // the name arrives halfway through the entry; the labels once the network is whole
     const arrived = (row, rows) => {
       if (row >= rows * 0.5) stage.classList.add('is-named');
@@ -92,7 +99,9 @@
     }, ENTRY));
     if (!hero.motion) arrived(1, 1);
     // turning the phone or resizing across the breakpoint re-weaves the hero on the other grid
-    PHONE.addEventListener('change', () => { hero.o.cell = heroCell(); hero.redraw(); });
+    PHONE.addEventListener('change', () => { hero.o.cell = heroCell(); hero.redraw(); if (shade) shade.size(); });
+    // the cursor's woven star, the lantern in the hero and the glow past it (mouse only)
+    if (window.Cursor) new window.Cursor({ hero: stage, sky: window.WINTER_SKY });
     const trackBox = (w, h) => ({ x: w * 0.04, y: h * 0.04, w: w * 0.92, h: h * 0.92 });
     new window.Loom(document.getElementById('track'), {
       cell: 6, rowMs: 14, startOnVisible: true, interactive: true, warp: false,
