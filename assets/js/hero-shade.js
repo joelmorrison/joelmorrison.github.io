@@ -1,7 +1,6 @@
 /* The hero's shading: the soft patches of halftone behind the network, drawn live so they can respond.
    They follow the lap the network is replaying: brighter as the car gathers speed, a lift on the accelerator,
-   dimmer under braking, and the light swings the way the car is steering. On a mouse, the dots near the pointer
-   rise; they are only ever dots that are already there.
+   dimmer under braking, and the light swings the way the car is steering. It does not respond to the pointer.
    One small shader on the graphics card works out every dot's size, so a screen of halftone costs almost nothing
    per frame; drawn one by one on a 2D canvas it would be some 35,000 dots, every frame. Without WebGL, or if the
    graphics card drops the context, the hero keeps its still shading woven into the cloth (main.js).
@@ -10,7 +9,6 @@
   'use strict';
 
   const REDUCED = matchMedia('(prefers-reduced-motion: reduce)');
-  const FINE = matchMedia('(hover: hover) and (pointer: fine)');
   const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   const rgb = hex => {
     const h = hex.replace('#', ''), n = parseInt(h.length === 3 ? h.replace(/./g, m => m + m) : h, 16);
@@ -19,10 +17,10 @@
 
   const VERT = 'attribute vec2 aP; void main() { gl_Position = vec4(aP, 0.0, 1.0); }';
   // One pass per pixel: find its weave cell, work out that cell's tone from the five patches, the fade behind the
-  // name and the pointer, then draw the cell's dot (a square of the same area when it is small), in the loom's
+  // name, then draw the cell's dot (a square of the same area when it is small), in the loom's
   // thread colours.
   const FRAG = `precision highp float;
-    uniform vec2 uRes, uGrid; uniform float uDpr, uCell, uFadeLo, uCap; uniform vec4 uSpot[5]; uniform vec3 uPtr, uC1, uC2;
+    uniform vec2 uRes, uGrid; uniform float uDpr, uCell, uFadeLo, uCap; uniform vec4 uSpot[5]; uniform vec3 uC1, uC2;
     void main() {
       vec2 p = vec2(gl_FragCoord.x, uRes.y * uDpr - gl_FragCoord.y) / uDpr;
       vec2 ij = floor(p / uCell);
@@ -33,7 +31,6 @@
       float y = min(uRes.y - 1.0, floor(c.y + 0.5)), u = (uRes.y - y) / (uRes.y - uFadeLo);
       float cut = u <= 0.0 ? 1.0 : (u < 0.5 ? 1.0 - 0.3 * (u / 0.5) : (u < 1.0 ? 0.85 * (1.0 - (u - 0.5) / 0.5) : 0.0));
       float t = (1.0 - rest) * (1.0 - cut);
-      if (uPtr.z > 0.01) { float d = distance(c, uPtr.xy) / 210.0; if (d < 1.0) t *= 1.0 + 1.3 * uPtr.z * (1.0 - d) * (1.0 - d); }
       if (t <= 0.02) discard;
       t = min(t, uCap);
       float r = uCell * 0.62 * pow(t, 0.75), px = 1.0 / uDpr, a;
@@ -66,14 +63,13 @@
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);   // one triangle over the whole canvas
         const aP = gl.getAttribLocation(pr, 'aP'); gl.enableVertexAttribArray(aP); gl.vertexAttribPointer(aP, 2, gl.FLOAT, false, 0, 0);
         this.u = {};
-        ['uRes', 'uGrid', 'uDpr', 'uCell', 'uFadeLo', 'uCap', 'uSpot', 'uPtr', 'uC1', 'uC2'].forEach(n => { this.u[n] = gl.getUniformLocation(pr, n); });
+        ['uRes', 'uGrid', 'uDpr', 'uCell', 'uFadeLo', 'uCap', 'uSpot', 'uC1', 'uC2'].forEach(n => { this.u[n] = gl.getUniformLocation(pr, n); });
         gl.uniform3fv(this.u.uC1, rgb(css('--thread'))); gl.uniform3fv(this.u.uC2, rgb(css('--thread-2')));
         gl.uniform1f(this.u.uCap, 0.56);   // the shading stays dots; floats are for the network
       } catch (err) { return; }
       this.gl = gl; this.ok = true;
       stage.insertBefore(this.c, stage.querySelector('.weave'));
       this.lap = { speed: 0.72, acc: 1, brake: 0, steer: 0 };
-      this.ptr = { x: 0, y: 0, a: 0, cx: -1, cy: -1, on: false };
       this.visible = true; this.running = false; this.last = 0;
       this.c.addEventListener('webglcontextlost', e => {
         e.preventDefault(); this.ok = false; this.c.remove();
@@ -82,11 +78,6 @@
       new IntersectionObserver(([e]) => { this.visible = e.isIntersecting; this.kick(); }, { threshold: 0 }).observe(stage);
       document.addEventListener('visibilitychange', () => this.kick());
       new ResizeObserver(() => this.size()).observe(stage);
-      if (FINE.matches) {
-        addEventListener('pointermove', e => { if (e.pointerType !== 'mouse') return; this.ptr.cx = e.clientX; this.ptr.cy = e.clientY; this.ptr.on = true; this.kick(); }, { passive: true });
-        document.documentElement.addEventListener('pointerleave', () => { this.ptr.on = false; this.kick(); });
-        addEventListener('scroll', () => this.kick(), { passive: true });
-      }
     }
 
     size() {
@@ -109,14 +100,13 @@
     frame(now) {
       if (!this.ok) { this.running = false; return; }
       const dt = this.last ? Math.min(64, now - this.last) : 16; this.last = now;
-      const lifting = this.draw(now, dt);
-      const on = this.visible && !document.hidden && (!REDUCED.matches || lifting);
+      this.draw(now, dt);
+      const on = this.visible && !document.hidden && !REDUCED.matches;
       if (on) requestAnimationFrame(t => this.frame(t)); else { this.running = false; this.last = 0; }
     }
 
-    // returns true while the pointer's lift is still settling
     draw(now, dt) {
-      if (!this.w) return false;
+      if (!this.w) return;
       const gl = this.gl, u = this.u, { w, h } = this, still = REDUCED.matches;
       const ease = tau => (still ? 1 : 1 - Math.exp(-dt / tau));
       let strength = this.o.strength(), shift = 0;
@@ -131,16 +121,8 @@
       const spots = new Float32Array(20);
       this.o.spots.forEach(([cx, cy, rad, a], k) => spots.set([(cx + shift) * w, cy * h, rad * Math.max(w, h), a * strength], k * 4));
       gl.uniform4fv(u.uSpot, spots);
-      // the pointer's lift, in the stage's own coordinates every frame, so it stays under the pointer while the page scrolls
-      const P = this.ptr, box = this.stage.getBoundingClientRect();
-      const inside = P.on && P.cy >= box.top && P.cy <= box.bottom;
-      if (inside) { P.x = P.cx - box.left; P.y = P.cy - box.top; }
-      const target = inside ? 1 : 0;
-      P.a += (target - P.a) * ease(200);
-      gl.uniform3f(u.uPtr, P.x, P.y, P.a);
       gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
-      return Math.abs(target - P.a) > 0.01;
     }
   }
 
