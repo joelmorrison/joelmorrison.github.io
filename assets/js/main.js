@@ -95,13 +95,13 @@
       if (row >= rows) { stage.classList.add('is-woven'); if (liveNet) liveNet.redraw(); }
     };
     const hero = new window.Loom(weave, Object.assign({
-      cell: heroCell(), interactive: true, eager: true, warp: false, motion: true, draw: heroPicture, onRow: arrived,
+      cell: heroCell(), interactive: true, sheen: false, eager: true, warp: false, motion: true, draw: heroPicture, onRow: arrived,
     }, ENTRY));
     if (!hero.motion) arrived(1, 1);
     // turning the phone or resizing across the breakpoint re-weaves the hero on the other grid
     PHONE.addEventListener('change', () => { hero.o.cell = heroCell(); hero.redraw(); if (shade) shade.size(); });
-    // the cursor's woven star, the lantern in the hero and the glow past it (mouse only)
-    if (window.Cursor) new window.Cursor({ hero: stage, sky: window.WINTER_SKY });
+    // the lantern: real stars come up under the network near the pointer (mouse only)
+    if (window.Lantern) new window.Lantern({ hero: stage, sky: window.WINTER_SKY });
     const trackBox = (w, h) => ({ x: w * 0.04, y: h * 0.04, w: w * 0.92, h: h * 0.92 });
     new window.Loom(document.getElementById('track'), {
       cell: 6, rowMs: 14, startOnVisible: true, interactive: true, warp: false,

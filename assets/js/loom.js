@@ -20,6 +20,7 @@
         rowMs: 12,
         startOnVisible: false,
         interactive: false, // sheen follows the pointer, press and hold for the linen tester
+        sheen: true,        // false keeps the linen tester but drops the sheen (the hero, where the lantern answers the pointer instead)
         zoom: 2.6,
         warp: true,
         onRow: null,
@@ -64,8 +65,8 @@
       c.addEventListener('pointermove', e => {
         if (!FINE.matches || !this.motion) return;
         const p = at(e);
-        if (!this.sheen.on) { this.sheen.x = p.x; this.sheen.y = p.y; }
-        this.sheen.on = true; this.pointer = p; this.kick();
+        this.pointer = p;
+        if (this.o.sheen) { if (!this.sheen.on) { this.sheen.x = p.x; this.sheen.y = p.y; } this.sheen.on = true; this.kick(); }
       });
       c.addEventListener('pointerleave', () => { this.sheen.on = false; this.lens.on = false; clearTimeout(this.holdTimer); this.kick(); });
       c.addEventListener('pointerdown', e => {
